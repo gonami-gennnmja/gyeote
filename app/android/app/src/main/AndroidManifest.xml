@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- 위치 공유 기능(이번 라운드 추가)에 필요한 권한.
+         ACCESS_BACKGROUND_LOCATION은 이번 라운드 범위(포그라운드 수집)에서는
+         실제로 요청하지 않지만, 다음 라운드에서 백그라운드 상시 공유를
+         구현할 때를 대비해 선언만 해둔다(Android 10+는 별도 배경 위치 권한
+         요청 플로우가 필요하며, Play Store 정책상 별도 심사 사유 설명이
+         필요함 — 실제 요청 코드는 permission/location_permission_service.dart
+         참고, 현재는 whileInUse까지만 요청). -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+
+    <application
+        android:label="곁에"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <!-- google_maps_flutter에 필요한 Maps SDK API 키.
+             가정(assumption): 실제 키는 비밀값이라 이 저장소에 커밋할 수 없으므로
+             플레이스홀더로 남겨둔다. 배포/로컬 실행 전에 `android/local.properties`
+             또는 매니페스트 플레이스홀더(manifestPlaceholders)로 실제 키를
+             주입하도록 build.gradle을 조정하고, 아래 값을 교체해야 한다. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="YOUR_GOOGLE_MAPS_API_KEY" />
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>

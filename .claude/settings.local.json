@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat)",
+      "Bash(supabase --version)",
+      "Bash(npm --version)",
+      "Bash(flutter --version)",
+      "Bash(timeout 60 npx -y supabase --version)",
+      "Bash(xargs -I{} echo {})",
+      "Bash(timeout 5 curl -sI https://storage.googleapis.com)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(timeout 60 npx -y supabase init --force)",
+      "Bash(jq --version)",
+      "Bash(apt-get install *)",
+      "Bash(git -C /workspace status)"
+    ]
+  }
+}

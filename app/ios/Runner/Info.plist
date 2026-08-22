@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>ko</string>
+	<key>CFBundleDisplayName</key>
+	<string>곁에</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.gyeote.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>gyeote</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<!-- 위치 공유 기능(이번 라운드 추가)에 필요한 권한 설명 문구.
+	     iOS는 이 문구 없이 위치 권한을 요청하면 앱이 즉시 크래시한다.
+	     NSLocationAlwaysAndWhenInUseUsageDescription은 이번 라운드에서 실제로
+	     요청하지는 않지만(포그라운드 whileInUse까지만, permission/
+	     location_permission_service.dart 참고), 다음 라운드 백그라운드 공유
+	     확장을 대비해 미리 선언해둔다. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>가족·연인·친구와 위치를 공유하려면 위치 접근 권한이 필요해요.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>앱을 사용하지 않을 때도 위치를 공유하려면 항상 허용이 필요해요.</string>
+</dict>
+</plist>

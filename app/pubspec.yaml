@@ -1,0 +1,48 @@
+name: gyeote
+description: "곁에(Gyeote) - 장거리 커플/가족/친구를 위한 위치 공유 및 공동 편집 앱"
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.6
+
+  # Backend: Supabase (Auth / Postgres+PostGIS / Realtime).
+  # 2.5.0 -> 2.8.0으로 상향: 위치 공유 실시간 채널이 Private 채널(Realtime
+  # Authorization, `RealtimeChannelConfig(private: true)`)을 사용해야 하는데,
+  # 이 기능은 supabase_flutter 2.5.0 시점에는 아직 없었다(대략 2.8.0 전후로
+  # 추가됨). 가정(assumption): 실제 `flutter pub get` 실행 환경에서 버전 해석이
+  # 실패하면(다른 패키지와 충돌 등) 가장 가까운 상위 버전으로 조정 필요.
+  supabase_flutter: ^2.8.0
+
+  # .env 파일로 SUPABASE_URL / SUPABASE_ANON_KEY 등 환경변수를 분리하기 위해 사용.
+  flutter_dotenv: ^5.1.0
+
+  # --- 위치 공유 기능 (이번 라운드 추가) -------------------------------------
+  # 위치 스트림 구독 + 권한 상태 조회(geolocator 자체 권한 API도 있지만, "영구
+  # 거부 후 설정 앱으로 유도" 플로우는 permission_handler가 더 다루기 쉬워 함께 사용).
+  geolocator: ^12.0.0
+  permission_handler: ^11.3.0
+
+  # 지도 화면(상대 위치 마커 표시)에 사용.
+  google_maps_flutter: ^2.9.0
+
+  # 위치 핑 전송 시 배터리 잔량/충전 상태를 함께 보내기 위해 사용.
+  battery_plus: ^6.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - .env
