@@ -23,6 +23,7 @@ supabase/
     20260820090010_location_history.sql      # 위치 이력 + 보존기간 정리 함수
     20260820090011_location_functions.sql    # 위치 핑 업서트/공유모드 설정/피어 조회 RPC
     20260820090012_location_realtime.sql     # Realtime Broadcast + Authorization
+    20260823100002_fix_location_spoofing_and_scope_bypass.sql # 위치 스푸핑/그룹 접근범위 우회 차단
 ```
 
 로컬 개발 시 (Docker 필요):
@@ -111,7 +112,7 @@ npx supabase db reset  # migrations/ 순서대로 재적용
 |---|---|
 | `set_location_share_mode(relationship_group_id, mode, pause_minutes default null)` | 그룹별 공유 모드 설정. 그룹 멤버만 호출 가능. 모든 그룹이 `off`가 되는 순간에만 `user_locations`의 본인 행을 삭제 |
 | `upsert_location_ping(location, accuracy_m, battery_level, is_charging, movement_state, captured_at)` | 본인 위치 핑 업서트 + `location_history`에 적재. 모든 그룹이 `off`면 거부. `captured_at`이 기존 저장값보다 과거면 무시(오프라인 큐 역행 방지) |
-| `get_peer_locations(relationship_group_id)` | 그룹 내 RLS상 조회 가능한 상대들의 최신 위치. `approx` 상대는 좌표를 약 100m 격자로 반올림, `accuracy_m`은 숨김 |
+| `get_peer_locations(relationship_group_id)` | 호출자가 실제 멤버인 그룹에서만 조회 가능(비멤버가 호출하면 빈 결과). 그룹 내 RLS상 조회 가능한 상대들의 최신 위치. `approx` 상대는 좌표를 약 100m 격자로 반올림, `accuracy_m`은 숨김 |
 | `get_share_mode(owner_id, relationship_group_id)` | (내부용 헬퍼, 필요 시 클라이언트도 호출 가능) 호출자가 이미 볼 권한이 있거나 본인 자신을 조회하는 경우에만 모드를 반환 — 임의 사용자의 공유 여부를 알아내는 경로 차단 |
 | `delete_expired_location_history(retention_days default 14)` | 보존기간 경과 이력 삭제. **`service_role` 전용**(일반 사용자 호출 불가). pg_cron 또는 외부 스케줄러로 주기 실행 필요(이 저장소에는 스케줄 등록을 포함하지 않음) |
 
