@@ -25,6 +25,7 @@ supabase/
     20260820090012_location_realtime.sql     # Realtime Broadcast + Authorization
     20260823100001_fix_invitation_email_check.sql # invited_email 검증 누락 버그 수정
     20260823100002_fix_location_spoofing_and_scope_bypass.sql # 위치 스푸핑/그룹 접근범위 우회 차단
+    20260823100003_fix_location_ping_input_validation.sql # accuracy_m/battery_level 입력 검증 누락 수정
 ```
 
 로컬 개발 시 (Docker 필요):
