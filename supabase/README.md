@@ -23,6 +23,7 @@ supabase/
     20260820090010_location_history.sql      # 위치 이력 + 보존기간 정리 함수
     20260820090011_location_functions.sql    # 위치 핑 업서트/공유모드 설정/피어 조회 RPC
     20260820090012_location_realtime.sql     # Realtime Broadcast + Authorization
+    20260823100001_fix_invitation_email_check.sql # invited_email 검증 누락 버그 수정
     20260823100002_fix_location_spoofing_and_scope_bypass.sql # 위치 스푸핑/그룹 접근범위 우회 차단
 ```
 
@@ -60,7 +61,7 @@ npx supabase db reset  # migrations/ 순서대로 재적용
 | `create_relationship_group(type, name)` | 그룹 생성 + 생성자를 owner로 등록 |
 | `create_relationship_invitation(group_id, invited_email?)` | 그룹 멤버가 초대 생성 |
 | `get_invitation_preview(invite_code)` | 미가입 상태에서 초대 코드로 그룹 정보 미리보기(최소 정보) |
-| `accept_relationship_invitation(invite_code)` | 초대 수락 → 멤버십 추가 + 초대 상태를 `accepted`로 갱신 |
+| `accept_relationship_invitation(invite_code)` | 초대 수락 → 멤버십 추가 + 초대 상태를 `accepted`로 갱신. `invited_email`이 지정된 초대는 호출자의 `auth.users.email`과 대소문자 무시 비교로 일치해야만 수락 가능(불일치 시 `invitation is scoped to a different email address`) |
 | `revoke_relationship_invitation(invitation_id)` | 초대자 또는 owner가 대기 중인 초대 취소 |
 | `leave_relationship_group(group_id)` | 본인 탈퇴. 마지막 멤버였다면 그룹 자체도 삭제(빈 그룹 방지) |
 | `remove_relationship_member(group_id, user_id)` | owner가 다른 멤버를 추방 |
