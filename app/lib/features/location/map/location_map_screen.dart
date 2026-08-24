@@ -119,7 +119,21 @@ class _LocationMapScreenState extends State<LocationMapScreen>
       });
     }
 
-    _subscribeRealtime();
+    try {
+      _subscribeRealtime();
+    } catch (e, stackTrace) {
+      // 구독 실패가 스냅샷 조회 성공까지 덮어써서는 안 된다 — 이미 받아온
+      // 스냅샷으로 지도 본체는 정상 표시 가능한 상황인데, 구독 예외가 위
+      // try/catch 밖에서 그대로 터지면 _refresh() 전체가 깨져 그 스냅샷마저
+      // 화면에 못 그리게 된다(Rena 재리뷰 지적). 숨은 멤버 조회와 동일하게
+      // 별도로 감싸고 로그만 남긴다.
+      developer.log(
+        'realtime 채널 구독 실패',
+        name: 'LocationMapScreen',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   /// `get_peer_locations`는 이 그룹에서 off/미설정/일시중지 중인 상대를
@@ -381,7 +395,13 @@ class _LocationMapScreenState extends State<LocationMapScreen>
                     ),
                   ),
                   SizedBox(
-                    height: 72,
+                    // 84 = 텍스트 두 줄(닉네임 1줄 + 상태 문구 최대 2줄) +
+                    // Container 패딩이 실제로 필요로 하는 높이보다 여유를 둔
+                    // 값이다. 이전에는 72였는데, 이 화면이 위젯 테스트로 실제
+                    // 렌더링된 게 이번이 처음이라 그때 2px RenderFlex overflow가
+                    // 드러났다(Tom 발견) — 폰트 배율(접근성 텍스트 크기 확대)에서도
+                    // 다시 넘치지 않도록 여유를 넉넉히 잡았다.
+                    height: 84,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
