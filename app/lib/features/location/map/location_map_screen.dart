@@ -33,11 +33,21 @@ class LocationMapScreen extends StatefulWidget {
   const LocationMapScreen({
     required this.groupId,
     required this.groupName,
+    this.repository,
+    this.relationshipRepository,
     super.key,
   });
 
   final String groupId;
   final String groupName;
+
+  /// 테스트에서 가짜 repository를 주입하기 위한 선택적 파라미터. 프로덕션
+  /// 호출부는 그대로 두면 되고(전달하지 않으면 null), null이면 지금까지와
+  /// 동일하게 이 화면이 실제 repository를 직접 생성해 쓴다 — 위젯 테스트가
+  /// `pumpWidget` 시점에 실제 Supabase 초기화 없이도 진입할 수 있게 하는
+  /// 용도일 뿐, 프로덕션 동작을 바꾸지 않는다.
+  final LocationRepository? repository;
+  final RelationshipRepository? relationshipRepository;
 
   @override
   State<LocationMapScreen> createState() => _LocationMapScreenState();
@@ -45,8 +55,9 @@ class LocationMapScreen extends StatefulWidget {
 
 class _LocationMapScreenState extends State<LocationMapScreen>
     with WidgetsBindingObserver {
-  final _repository = LocationRepository();
-  final _relationshipRepository = RelationshipRepository();
+  late final _repository = widget.repository ?? LocationRepository();
+  late final _relationshipRepository =
+      widget.relationshipRepository ?? RelationshipRepository();
 
   GoogleMapController? _mapController;
   RealtimeChannel? _channel;
