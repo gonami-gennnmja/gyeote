@@ -426,9 +426,14 @@ class _HiddenPeerChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
-    final isPaused = hidden.isPaused == true;
-    final icon = isPaused ? Icons.pause_circle_outline : Icons.visibility_off_outlined;
-    final label = isPaused ? '일시중지 중 · 곧 다시 보일 수 있어요' : '지금은 위치가 보이지 않아요';
+    // hidden.isPaused를 여기서 직접 == true로 비교하지 않는다 — false/null을
+    // 구분하지 않는다는 규칙은 HiddenPeer.showPausedBadge(순수 계층, 테스트로
+    // 검증됨)에 있고, 이 위젯은 그 결과만 그린다.
+    final showPausedBadge = hidden.showPausedBadge;
+    final icon =
+        showPausedBadge ? Icons.pause_circle_outline : Icons.visibility_off_outlined;
+    final label =
+        showPausedBadge ? '일시중지 중 · 곧 다시 보일 수 있어요' : '지금은 위치가 보이지 않아요';
 
     return Container(
       width: 200,

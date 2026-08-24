@@ -3,17 +3,27 @@ import '../relationships/data/models/relationship_member.dart';
 /// 그룹 로스터에는 있지만(=아직 멤버) 위치 결과엔 없는(=지금 내게 위치가
 /// 안 보이는) 상대 한 명. 화면이 그대로 그릴 수 있는 형태다.
 ///
-/// `isPaused`는 `is_location_paused` RPC의 결과를 그대로 담는다 — `true`만
-/// "일시중지 중"으로 구체적으로 표시한다. `false`(설정 행 있음=명시적으로
-/// 껐음)와 `null`(설정 행 없음=미설정)은 서로 다른 값이지만 절대 구분해서
-/// 보여주지 않고 하나의 중립 상태로 합친다 — 구분해 보여주면 상대가 감추고
-/// 싶어하는 "off 여부" 자체를 노출하는 오라클이 되기 때문이다(Din UX 리뷰
-/// P0-6, Plexa 2026-08-24 정정).
+/// `isPaused`는 `is_location_paused` RPC의 원본 반환값을 그대로 담는다.
+/// **위젯은 이 값을 직접 보고 분기해서는 안 된다** — `false`(설정 행
+/// 있음=명시적으로 껐음)와 `null`(설정 행 없음=미설정)을 구분해서 보여주면
+/// 상대가 감추고 싶어하는 "off 여부" 자체를 노출하는 오라클이 되기 때문이다
+/// (Din UX 리뷰 P0-6, Plexa 2026-08-24 정정). 이 규칙을 실제로 지키는 값은
+/// [showPausedBadge]다 — `isPaused == true`일 때만 `true`이고, `false`와
+/// `null`은 생성자에서 이미 하나로 합쳐진다. 화면은 반드시 `showPausedBadge`
+/// 만 보고 그려야 하고, 그래야 이 규칙이 위젯이 아니라 순수 계층(테스트가
+/// 닿는 자리)에 고정된다.
 class HiddenPeer {
-  const HiddenPeer({required this.member, required this.isPaused});
+  const HiddenPeer({required this.member, required this.isPaused})
+      : showPausedBadge = isPaused == true;
 
   final RelationshipMember member;
+
+  /// 원본 반환값. 디버깅/로그 용도로만 남겨둔다 — 화면 분기에는
+  /// [showPausedBadge]를 쓴다.
   final bool? isPaused;
+
+  /// 화면이 그려야 할 최종 판단: 일시중지 배지를 보여줄지 여부.
+  final bool showPausedBadge;
 }
 
 /// 그룹 로스터에는 있고(=아직 멤버) 지금 위치 결과엔 없는(=화면에 보이지
