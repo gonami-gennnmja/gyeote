@@ -8,11 +8,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
 import '../../auth/data/auth_repository.dart';
-import '../../relationships/data/models/relationship_member.dart';
 import '../../relationships/data/relationship_repository.dart';
 import '../data/location_repository.dart';
 import '../data/models/geo_point.dart';
 import '../data/models/peer_location.dart';
+import '../hidden_peers.dart';
 
 /// 특정 관계 그룹의 상대 위치를 지도에 표시하는 화면.
 ///
@@ -63,7 +63,7 @@ class _LocationMapScreenState extends State<LocationMapScreen>
   RealtimeChannel? _channel;
 
   Map<String, PeerLocation> _peers = {};
-  List<_HiddenPeer> _hiddenPeers = [];
+  List<HiddenPeer> _hiddenPeers = [];
   bool _isLoading = true;
   Object? _error;
 
@@ -127,39 +127,42 @@ class _LocationMapScreenState extends State<LocationMapScreen>
   /// 아무 설명 없이 사라지지 않도록, "그룹 로스터엔 있는데 위치 결과엔
   /// 없는" 상대를 따로 골라 별도 섹션에 표시한다(Din UX 리뷰 P0-6).
   ///
-  /// `location_share_settings`가 본인 행만 조회 가능하도록 RLS가 설계돼
-  /// 있어(다른 사람의 on/off 여부를 원천적으로 숨기는 것이 의도), off인지
-  /// 미설정인지는 절대 구분해서 보여주지 않는다 — `is_location_paused`가
-  /// 반환하는 `false`(명시적으로 껐음)와 `null`(설정 행 없음/미설정)은 서로
-  /// 다른 값이지만, 이 둘을 다르게 표시하면 상대가 감추고 싶어하는 "off
-  /// 여부" 자체를 그대로 노출하는 오라클이 된다(Plexa 2026-08-24 정정). 그래서
-  /// `_HiddenPeerChip`은 `isPaused == true`인지 아닌지 딱 한 가지 기준으로만
-  /// 갈리고, `false`/`null`은 코드에서도 절대 나눠 다루지 않는다. 이 화면의
-  /// 핵심 지도/칩 표시와는 별개 기능이므로 실패해도 지도 표시 자체를 에러로
-  /// 만들지 않고 로그만 남긴다.
+  /// 실제 "판단"(누가 숨은 멤버인지, `is_location_paused`의 `false`/`null`을
+  /// 절대 구분하지 않는다는 규칙 포함)은 화면 밖 순수 함수인
+  /// `hidden_peers.dart`의 `selectHiddenCandidates`/`buildHiddenPeers`로
+  /// 뽑아뒀다(`ShareStatusSummary.compute()`와 같은 방식) — 위젯을 띄우지
+  /// 않고도 그 판단만 단위 테스트할 수 있게 하기 위해서다. 이 메서드는 비동기
+  /// 조회(로스터 fetch, `isLocationPaused` N+1 호출)를 오케스트레이션해서 그
+  /// 순수 함수들에 데이터를 넣어주는 역할만 한다. 이 화면의 핵심 지도/칩
+  /// 표시와는 별개 기능이므로 실패해도 지도 표시 자체를 에러로 만들지 않고
+  /// 로그만 남긴다.
   Future<void> _refreshHiddenPeers() async {
     try {
       final roster = await _relationshipRepository.fetchGroupMembers(
         widget.groupId,
       );
-      final hiddenMembers = roster
-          .where(
-            (m) => m.userId != _currentUserId && !_peers.containsKey(m.userId),
-          )
-          .toList();
+      final candidates = selectHiddenCandidates(
+        roster: roster,
+        visiblePeerIds: _peers.keys,
+        currentUserId: _currentUserId,
+      );
 
       final pausedFlags = await Future.wait(
-        hiddenMembers.map(
+        candidates.map(
           (m) => _repository.isLocationPaused(m.userId, widget.groupId),
         ),
       );
+      final pausedByUserId = {
+        for (var i = 0; i < candidates.length; i++)
+          candidates[i].userId: pausedFlags[i],
+      };
 
       if (!mounted) return;
       setState(() {
-        _hiddenPeers = [
-          for (var i = 0; i < hiddenMembers.length; i++)
-            _HiddenPeer(member: hiddenMembers[i], isPaused: pausedFlags[i]),
-        ];
+        _hiddenPeers = buildHiddenPeers(
+          candidates: candidates,
+          pausedByUserId: pausedByUserId,
+        );
       });
     } catch (e, stackTrace) {
       developer.log(
@@ -395,25 +398,10 @@ class _LocationMapScreenState extends State<LocationMapScreen>
   }
 }
 
-/// 그룹 로스터에는 있지만(=아직 멤버) `get_peer_locations` 결과엔 없는
-/// (=지금 내게 위치가 안 보이는) 상대 한 명.
-///
-/// `isPaused`는 `is_location_paused` RPC의 결과를 그대로 담는다 — `true`만
-/// "일시중지 중"으로 구체적으로 표시한다. `false`(명시적으로 off)와
-/// `null`(미설정)은 서로 다른 값이지만 절대 구분해서 보여주지 않고 하나의
-/// 중립 상태로 합친다 — 구분해 보여주면 상대의 off 여부를 노출하는 오라클이
-/// 되기 때문이다(`LocationRepository.isLocationPaused` 문서 참고).
-class _HiddenPeer {
-  const _HiddenPeer({required this.member, required this.isPaused});
-
-  final RelationshipMember member;
-  final bool? isPaused;
-}
-
 class _HiddenPeerChip extends StatelessWidget {
   const _HiddenPeerChip({required this.hidden});
 
-  final _HiddenPeer hidden;
+  final HiddenPeer hidden;
 
   @override
   Widget build(BuildContext context) {
