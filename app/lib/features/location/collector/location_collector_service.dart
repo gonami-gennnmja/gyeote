@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:geolocator/geolocator.dart';
@@ -163,9 +164,21 @@ class LocationCollectorService {
       // sent == false: 모든 그룹에서 공유가 OFF라 서버가 조용히 거부한 것
       // (upsert_location_ping 계약, LocationRepository에서 이미 필터링됨).
       // 사용자가 의도적으로 꺼둔 상태이므로 에러로 취급하지 않는다.
-    } on Exception {
+    } on Exception catch (e, stackTrace) {
       // 네트워크 오류 등. 위 클래스 doc 참고 — 영속 재시도 큐는 다음 라운드.
       // _lastSentAt을 갱신하지 않으므로 다음 위치 갱신 시 다시 시도된다.
+      //
+      // 화면에는 표시하지 않지만(수집기는 백그라운드 동작이라 보여줄 화면이
+      // 없음) 로그는 반드시 남긴다 — 서버에 새로 추가된 accuracy_m/
+      // battery_level 범위 검증처럼 센서·클라이언트 버그를 가리키는 예외까지
+      // 이 블록이 흔적 없이 삼키면 디버깅 단서가 전혀 남지 않는다(Rena
+      // 재리뷰 지적). location_map_screen._refresh와 동일한 패턴.
+      developer.log(
+        '위치 핑 전송 실패',
+        name: 'LocationCollectorService',
+        error: e,
+        stackTrace: stackTrace,
+      );
     } finally {
       _isSending = false;
     }

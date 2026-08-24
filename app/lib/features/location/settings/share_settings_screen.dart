@@ -9,6 +9,38 @@ import '../data/location_repository.dart';
 import '../data/models/location_share_setting.dart';
 import '../permission/location_permission_screen.dart';
 import '../permission/location_permission_service.dart';
+import '../share_status_summary.dart';
+
+/// `set_location_share_mode` RPC가 던지는 서버 원문 예외 메시지를 사용자
+/// 대상 한글 문구로 매핑한다(Din UX 리뷰 P0-5).
+///
+/// `_setMode`/`_pause`/`_resumeNow`가 지금까지 `PostgrestException.message`를
+/// 스낵바에 그대로 노출해왔다 — 위치 기능 마이그레이션 전체를 전수 조사한
+/// 결과 이 경로로 실제 도달 가능한 서버 메시지는 아래 4개뿐이었다(그중
+/// `not a member of this group`만 실사용 시나리오에서 실제로 트리거된다).
+/// 화이트리스트에 없는 메시지는 절대 원문을 그대로 흘려보내지 않고 항상
+/// 호출부가 넘긴 `fallback`으로 덮는다 — 매칭 실패가 곧 원문 노출로 이어지는
+/// 구조를 만들지 않기 위함이다. 판별은 `LocationRepository._isAllSharesOffError()`와
+/// 동일하게 `e.message`를 소문자로 바꿔 `contains()`로 매칭한다(백엔드가
+/// 전용 에러 코드를 아직 정의하지 않아 문자열 매칭이 현재 유일한 수단).
+String _mapShareErrorMessage(PostgrestException e, {required String fallback}) {
+  final message = e.message.toLowerCase();
+
+  if (message.contains('authentication required')) {
+    return '로그인이 만료됐어요. 다시 로그인해주세요.';
+  }
+  if (message.contains('not a member of this group')) {
+    return '더 이상 이 그룹의 멤버가 아니에요.';
+  }
+  if (message.contains('invalid mode:')) {
+    return '선택할 수 없는 모드예요. 다시 시도해주세요.';
+  }
+  if (message.contains('pause_minutes must be a positive integer')) {
+    return '일시중지 시간을 다시 선택해주세요.';
+  }
+
+  return fallback;
+}
 
 /// 관계 그룹별 위치 공유 모드(off/precise/approx)를 설정하는 화면.
 ///
@@ -76,6 +108,8 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
     }
 
     final status = await _permissionService.checkStatus();
+    if (!mounted) return;
+
     final alreadyGranted =
         status == LocationPermissionResult.grantedWhileInUse ||
         status == LocationPermissionResult.grantedAlways;
@@ -103,7 +137,10 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       );
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(_mapShareErrorMessage(
+        e,
+        fallback: '공유 설정을 변경하지 못했습니다. 다시 시도해주세요.',
+      ));
     } catch (e) {
       _showSnackBar('공유 설정을 변경하지 못했습니다. 다시 시도해주세요.');
     } finally {
@@ -126,7 +163,10 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _showSnackBar('$minutes분 동안 위치 공유를 일시중지합니다.');
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(_mapShareErrorMessage(
+        e,
+        fallback: '일시중지 설정에 실패했습니다. 다시 시도해주세요.',
+      ));
     } catch (e) {
       _showSnackBar('일시중지 설정에 실패했습니다. 다시 시도해주세요.');
     } finally {
@@ -147,7 +187,12 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _showSnackBar('공유를 다시 시작합니다.');
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(_mapShareErrorMessage(
+        e,
+        fallback: '공유를 다시 시작하지 못했습니다. 다시 시도해주세요.',
+      ));
+    } catch (e) {
+      _showSnackBar('공유를 다시 시작하지 못했습니다. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -218,6 +263,14 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
                     onChanged: _isMutating ? null : _toggleCollector,
                   ),
                 ),
+                const SizedBox(height: 8),
+                _ShareStatusBanner(
+                  summary: ShareStatusSummary.compute(
+                    groups: data.groups,
+                    settingsByGroup: data.settingsByGroup,
+                    collectorRunning: _collector.isRunning,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 if (data.groups.isEmpty)
                   const Padding(
@@ -234,6 +287,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
                             relationshipGroupId: group.id,
                           ),
                       isMutating: _isMutating,
+                      collectorRunning: _collector.isRunning,
                       onModeSelected: (mode) =>
                           _setMode(group: group, mode: mode),
                       onPauseRequested: (currentMode) =>
@@ -256,6 +310,7 @@ class _GroupShareCard extends StatelessWidget {
     required this.group,
     required this.setting,
     required this.isMutating,
+    required this.collectorRunning,
     required this.onModeSelected,
     required this.onPauseRequested,
     required this.onResumeNow,
@@ -264,6 +319,7 @@ class _GroupShareCard extends StatelessWidget {
   final RelationshipGroup group;
   final LocationShareSetting setting;
   final bool isMutating;
+  final bool collectorRunning;
   final ValueChanged<String> onModeSelected;
   final ValueChanged<String> onPauseRequested;
   final ValueChanged<String> onResumeNow;
@@ -290,17 +346,29 @@ class _GroupShareCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (!collectorRunning) ...[
+              const SizedBox(height: 8),
+              Text(
+                '⚠ 위치 수집이 꺼져 있어 이 설정은 적용되지 않아요.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+              ),
+            ],
             const SizedBox(height: 12),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'off', label: Text('끄기')),
-                ButtonSegment(value: 'precise', label: Text('정밀')),
-                ButtonSegment(value: 'approx', label: Text('대략')),
-              ],
-              selected: {setting.mode},
-              onSelectionChanged: isMutating
-                  ? null
-                  : (selection) => onModeSelected(selection.first),
+            Opacity(
+              opacity: collectorRunning ? 1.0 : 0.6,
+              child: SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'off', label: Text('끄기')),
+                  ButtonSegment(value: 'precise', label: Text('정밀')),
+                  ButtonSegment(value: 'approx', label: Text('대략')),
+                ],
+                selected: {setting.mode},
+                onSelectionChanged: isMutating
+                    ? null
+                    : (selection) => onModeSelected(selection.first),
+              ),
             ),
             if (!setting.isOff) ...[
               const SizedBox(height: 12),
@@ -333,6 +401,58 @@ class _GroupShareCard extends StatelessWidget {
                   ),
                 ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "지금 실제로 누구에게 내 위치가 보이는가"를 요약해 보여주는 배너
+/// (Din UX 리뷰 P0-1). 수집 스위치 카드 바로 아래 배치해, 그룹 카드들을
+/// 하나하나 조합해 보지 않아도 실제 공유 상태를 한눈에 알 수 있게 한다.
+class _ShareStatusBanner extends StatelessWidget {
+  const _ShareStatusBanner({required this.summary});
+
+  final ShareStatusSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final IconData icon;
+    final Color color;
+    switch (summary.tone) {
+      case ShareStatusTone.off:
+        icon = Icons.visibility_off_outlined;
+        color = colorScheme.onSurfaceVariant;
+        break;
+      case ShareStatusTone.collectingOnly:
+        icon = Icons.info_outline;
+        color = colorScheme.onSurfaceVariant;
+        break;
+      case ShareStatusTone.sharing:
+        icon = Icons.visibility_outlined;
+        color = colorScheme.primary;
+        break;
+    }
+
+    return Card(
+      color: colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                summary.message,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: color),
+              ),
+            ),
           ],
         ),
       ),

@@ -1,8 +1,15 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/supabase/supabase_client.dart';
+import '../../auth/data/auth_repository.dart';
+import '../../relationships/data/models/relationship_member.dart';
+import '../../relationships/data/relationship_repository.dart';
 import '../data/location_repository.dart';
 import '../data/models/geo_point.dart';
 import '../data/models/peer_location.dart';
@@ -39,11 +46,13 @@ class LocationMapScreen extends StatefulWidget {
 class _LocationMapScreenState extends State<LocationMapScreen>
     with WidgetsBindingObserver {
   final _repository = LocationRepository();
+  final _relationshipRepository = RelationshipRepository();
 
   GoogleMapController? _mapController;
   RealtimeChannel? _channel;
 
   Map<String, PeerLocation> _peers = {};
+  List<_HiddenPeer> _hiddenPeers = [];
   bool _isLoading = true;
   Object? _error;
 
@@ -82,7 +91,16 @@ class _LocationMapScreenState extends State<LocationMapScreen>
         _error = null;
         _isLoading = false;
       });
-    } catch (e) {
+      unawaited(_refreshHiddenPeers());
+    } catch (e, stackTrace) {
+      // 원본 예외는 로그에만 남기고 사용자에게는 정제된 문구만 보여준다
+      // (Din UX 리뷰 P0-4 — 원본 예외 노출은 UX 문제이자 정보 노출 문제).
+      developer.log(
+        '위치 스냅샷 조회 실패',
+        name: 'LocationMapScreen',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (!mounted) return;
       setState(() {
         _error = e;
@@ -91,6 +109,55 @@ class _LocationMapScreenState extends State<LocationMapScreen>
     }
 
     _subscribeRealtime();
+  }
+
+  /// `get_peer_locations`는 이 그룹에서 off/미설정/일시중지 중인 상대를
+  /// 결과에서 완전히 제외한다(100002 마이그레이션). 그런 상대가 화면에서
+  /// 아무 설명 없이 사라지지 않도록, "그룹 로스터엔 있는데 위치 결과엔
+  /// 없는" 상대를 따로 골라 별도 섹션에 표시한다(Din UX 리뷰 P0-6).
+  ///
+  /// `location_share_settings`가 본인 행만 조회 가능하도록 RLS가 설계돼
+  /// 있어(다른 사람의 on/off 여부를 원천적으로 숨기는 것이 의도), off인지
+  /// 미설정인지는 절대 구분해서 보여주지 않는다 — `is_location_paused`가
+  /// 반환하는 `false`(명시적으로 껐음)와 `null`(설정 행 없음/미설정)은 서로
+  /// 다른 값이지만, 이 둘을 다르게 표시하면 상대가 감추고 싶어하는 "off
+  /// 여부" 자체를 그대로 노출하는 오라클이 된다(Plexa 2026-08-24 정정). 그래서
+  /// `_HiddenPeerChip`은 `isPaused == true`인지 아닌지 딱 한 가지 기준으로만
+  /// 갈리고, `false`/`null`은 코드에서도 절대 나눠 다루지 않는다. 이 화면의
+  /// 핵심 지도/칩 표시와는 별개 기능이므로 실패해도 지도 표시 자체를 에러로
+  /// 만들지 않고 로그만 남긴다.
+  Future<void> _refreshHiddenPeers() async {
+    try {
+      final roster = await _relationshipRepository.fetchGroupMembers(
+        widget.groupId,
+      );
+      final hiddenMembers = roster
+          .where(
+            (m) => m.userId != _currentUserId && !_peers.containsKey(m.userId),
+          )
+          .toList();
+
+      final pausedFlags = await Future.wait(
+        hiddenMembers.map(
+          (m) => _repository.isLocationPaused(m.userId, widget.groupId),
+        ),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _hiddenPeers = [
+          for (var i = 0; i < hiddenMembers.length; i++)
+            _HiddenPeer(member: hiddenMembers[i], isPaused: pausedFlags[i]),
+        ];
+      });
+    } catch (e, stackTrace) {
+      developer.log(
+        '위치가 보이지 않는 멤버 상태 조회 실패',
+        name: 'LocationMapScreen',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
   }
 
   void _subscribeRealtime() {
@@ -239,7 +306,7 @@ class _LocationMapScreenState extends State<LocationMapScreen>
         ],
       ),
       body: _error != null
-          ? Center(child: Text('불러오지 못했습니다: $_error'))
+          ? _ErrorState(error: _error!, onRetry: _refresh)
           : Column(
               children: [
                 Expanded(
@@ -289,8 +356,193 @@ class _LocationMapScreenState extends State<LocationMapScreen>
                           _PeerSummaryChip(peer: peers[index], onTap: () => _focusOn(peers[index])),
                     ),
                   ),
+                if (_hiddenPeers.isNotEmpty) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+                    child: Text(
+                      '지금 위치가 보이지 않는 멤버',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                  SizedBox(
+                    height: 72,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      itemCount: _hiddenPeers.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) =>
+                          _HiddenPeerChip(hidden: _hiddenPeers[index]),
+                    ),
+                  ),
+                ],
               ],
             ),
+    );
+  }
+}
+
+/// 그룹 로스터에는 있지만(=아직 멤버) `get_peer_locations` 결과엔 없는
+/// (=지금 내게 위치가 안 보이는) 상대 한 명.
+///
+/// `isPaused`는 `is_location_paused` RPC의 결과를 그대로 담는다 — `true`만
+/// "일시중지 중"으로 구체적으로 표시한다. `false`(명시적으로 off)와
+/// `null`(미설정)은 서로 다른 값이지만 절대 구분해서 보여주지 않고 하나의
+/// 중립 상태로 합친다 — 구분해 보여주면 상대의 off 여부를 노출하는 오라클이
+/// 되기 때문이다(`LocationRepository.isLocationPaused` 문서 참고).
+class _HiddenPeer {
+  const _HiddenPeer({required this.member, required this.isPaused});
+
+  final RelationshipMember member;
+  final bool? isPaused;
+}
+
+class _HiddenPeerChip extends StatelessWidget {
+  const _HiddenPeerChip({required this.hidden});
+
+  final _HiddenPeer hidden;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurfaceVariant = Theme.of(context).colorScheme.onSurfaceVariant;
+    final isPaused = hidden.isPaused == true;
+    final icon = isPaused ? Icons.pause_circle_outline : Icons.visibility_off_outlined;
+    final label = isPaused ? '일시중지 중 · 곧 다시 보일 수 있어요' : '지금은 위치가 보이지 않아요';
+
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 16, color: onSurfaceVariant),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  hidden.member.nickname,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(color: onSurfaceVariant),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _MapErrorKind { network, authExpired, generic }
+
+/// 원본 예외를 종류별로 분류한다 — 판별 우선순위는 네트워크 끊김 -> 인증 만료
+/// -> 그 외 순서다. 네트워크가 끊긴 상태에서 인증도 만료돼 있을 수 있는데,
+/// 이 경우 "인터넷부터 확인하라"는 메시지가 사용자에게 더 실행 가능하기
+/// 때문이다(Din UX 리뷰 P0-4 최종 카피 확정, 2026-08-23).
+_MapErrorKind _classifyError(Object error) {
+  if (error is SocketException || error is TimeoutException) {
+    return _MapErrorKind.network;
+  }
+  if (error is AuthException) return _MapErrorKind.authExpired;
+  if (error is PostgrestException &&
+      (error.code == 'PGRST301' || error.code == '401')) {
+    return _MapErrorKind.authExpired;
+  }
+  return _MapErrorKind.generic;
+}
+
+/// 위치 스냅샷 조회 실패 시 보여주는 화면.
+///
+/// 원본 예외(`Object`)를 절대 화면 문자열에 보간하지 않는다 — 스택트레이스성
+/// 텍스트나 영어 예외 메시지가 그대로 노출되는 것을 막기 위함(Din UX 리뷰
+/// P0-4). 세 케이스 모두 고정된 한글 문구만 사용하고 `e.message`/`e.toString()`
+/// 등 원본 텍스트는 절대 화면에 넣지 않는다 — 이 화면이 호출하는
+/// `get_peer_locations`는 `raise exception`이 없는 순수 SELECT라서, 여기 담길
+/// 수 있는 `PostgrestException.message`는 우리가 정의한 안전한 매핑 대상이
+/// 아니라 항상 Postgres/PostgREST 인프라 레벨의 영어 원문뿐이기 때문이다
+/// (Din UX 리뷰 "서버 예외 메시지 전수 조사", 2026-08-23 정정). 원본 예외는
+/// 호출 쪽(`_refresh`)에서 이미 로그로 남겼다.
+///
+/// `get_peer_locations`는 호출자가 그룹 멤버가 아니어도 예외 없이 빈 결과를
+/// 반환하도록 이미 수정돼 있으므로(HIGH-2,
+/// `20260823100002_fix_location_spoofing_and_scope_bypass.sql`), "그룹 접근
+/// 권한 없음"은 별도 에러 케이스로 다루지 않는다 — 그 경우는 기존 빈 상태
+/// 문구로 자연스럽게 처리된다.
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  Future<void> _reauth(BuildContext context) async {
+    await AuthRepository().signOut();
+    if (context.mounted) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kind = _classifyError(error);
+
+    final IconData icon;
+    final String message;
+    switch (kind) {
+      case _MapErrorKind.network:
+        icon = Icons.wifi_off;
+        message = '네트워크에 연결되어 있지 않아요.\nWi-Fi나 데이터 연결을 확인하고 다시 시도해주세요.';
+        break;
+      case _MapErrorKind.authExpired:
+        icon = Icons.lock_outline;
+        message = '로그인이 만료됐어요.\n다시 로그인하면 위치를 볼 수 있어요.';
+        break;
+      case _MapErrorKind.generic:
+        icon = Icons.error_outline;
+        message = '위치 정보를 불러오지 못했어요.\n잠시 후 다시 시도해주세요.';
+        break;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: Theme.of(context).colorScheme.error),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: kind == _MapErrorKind.authExpired
+                  ? () => _reauth(context)
+                  : onRetry,
+              child: Text(kind == _MapErrorKind.authExpired ? '다시 로그인' : '다시 시도'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

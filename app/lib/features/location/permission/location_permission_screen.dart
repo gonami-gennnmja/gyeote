@@ -68,7 +68,9 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
             const Text(
               '• 그룹별로 공유 대상과 정밀도(정밀/대략)를 직접 설정할 수 있어요.\n'
               '• 언제든지 공유 설정 화면에서 공유를 끌 수 있어요.\n'
-              '• 위치는 공유를 켠 그룹의 멤버에게만 보여요.',
+              '• 위치는 공유를 켠 그룹의 멤버에게만 보여요.\n'
+              '• 지금은 앱이 켜져 있을 때만 위치가 전달돼요. 앱을 완전히 끄면\n'
+              '  위치 공유가 잠시 멈춰요. (백그라운드 공유는 다음 업데이트 예정)',
               textAlign: TextAlign.left,
             ),
             const SizedBox(height: 24),

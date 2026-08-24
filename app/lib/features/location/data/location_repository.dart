@@ -119,6 +119,30 @@ class LocationRepository {
     return LocationShareSetting.fromJson(row as Map<String, dynamic>);
   }
 
+  /// 특정 상대가 해당 그룹에서 지금 위치 공유를 일시중지 중인지 조회한다.
+  ///
+  /// `location_share_settings`는 본인 행만 직접 SELECT할 수 있어(RLS) 상대의
+  /// on/off 여부는 원천적으로 알 수 없지만, "일시중지 중인지"만은
+  /// `is_location_paused` RPC(100002 마이그레이션에서 `authenticated`에게
+  /// 이미 grant됨)로 안전하게 물어볼 수 있다 — 반환값 해석(Din UX 리뷰 P0-6,
+  /// Plexa 2026-08-24 정정):
+  /// - `true`: 실제로 일시중지 중임을 구체적으로 알 수 있는 케이스.
+  /// - `false`: 설정 행은 있지만(off 등) 일시중지는 아닌 경우.
+  /// - `null`: 설정 행 자체가 없는(한 번도 설정 안 함) 경우.
+  ///
+  /// `false`와 `null`은 서로 다른 의미이지만(전자는 "명시적으로 껐음", 후자는
+  /// "미설정") **호출부에서 절대 다르게 표시해서는 안 된다.** 이 둘을 구분해
+  /// 보여주면 상대가 감추고 싶어하는 "off 여부" 자체를 그대로 노출하는
+  /// 오라클이 되기 때문이다 — "구분이 안 돼서"가 아니라 "구분되지만 보여주면
+  /// 안 돼서" 하나로 합친다. 판단 기준은 오직 `== true`인지 아닌지 하나뿐이다.
+  Future<bool?> isLocationPaused(String peerId, String groupId) async {
+    final result = await _client.rpc(
+      'is_location_paused',
+      params: {'p_owner_id': peerId, 'p_relationship_group_id': groupId},
+    );
+    return result as bool?;
+  }
+
   /// 내 모든 그룹의 공유 설정. `location_share_settings`는 본인 행만 SELECT
   /// 가능하므로 별도 group 필터 없이 전체를 가져와 화면에서 그룹별로 매핑한다.
   /// 아직 한 번도 설정하지 않은 그룹은 행 자체가 없다 (기본값 'off'로 취급).
