@@ -50,6 +50,66 @@ void main() {
     });
   });
 
+  group('PeerLocation.isStale', () {
+    // 임계값은 30분(PeerLocation.staleThreshold). 지도 마커 alpha와 피어 칩
+    // 톤다운이 이 값 하나에 걸려 있으므로 경계(29:59 / 30:00 / 30:01)를 못박아
+    // 둔다.
+    final now = DateTime.utc(2026, 8, 23, 12, 0, 0);
+
+    test('threshold 상수가 30분이다', () {
+      expect(PeerLocation.staleThreshold, const Duration(minutes: 30));
+    });
+
+    test('방금 받은 위치는 stale이 아니다', () {
+      final peer = _peerAt(now.subtract(const Duration(seconds: 10)));
+      expect(peer.isStale(now: now), isFalse);
+    });
+
+    test('임계값 직전(29분 59초)은 아직 stale이 아니다', () {
+      final peer = _peerAt(
+        now.subtract(const Duration(minutes: 29, seconds: 59)),
+      );
+      expect(peer.isStale(now: now), isFalse);
+    });
+
+    test('정확히 임계값(30분 0초)이면 stale이다 (>= 비교)', () {
+      final peer = _peerAt(now.subtract(const Duration(minutes: 30)));
+      expect(peer.isStale(now: now), isTrue);
+    });
+
+    test('임계값을 넘으면(30분 1초) stale이다', () {
+      final peer = _peerAt(
+        now.subtract(const Duration(minutes: 30, seconds: 1)),
+      );
+      expect(peer.isStale(now: now), isTrue);
+    });
+
+    test('몇 시간 지난 위치도 stale이다', () {
+      final peer = _peerAt(now.subtract(const Duration(hours: 5)));
+      expect(peer.isStale(now: now), isTrue);
+    });
+
+    test('미래 시각(시계 오차로 receivedAt이 now보다 뒤)이면 stale이 아니다', () {
+      final peer = _peerAt(now.add(const Duration(minutes: 40)));
+      expect(peer.isStale(now: now), isFalse);
+    });
+
+    test('receivedAt이 로컬 타임존이어도 UTC로 환산해 판단한다', () {
+      // now(UTC 12:00)에서 정확히 40분 전을 KST(+09:00)로 표현한 값.
+      // toUtc() 없이 로컬끼리 빼면 오프셋만큼 어긋나 결과가 뒤집힐 수 있다.
+      final receivedLocalKst = DateTime.parse('2026-08-23T20:20:00+09:00');
+      final peer = _peerAt(receivedLocalKst);
+      expect(peer.isStale(now: now), isTrue);
+    });
+
+    test('now를 생략하면 현재 시각 기준으로 동작한다 (오래된 위치 → stale)', () {
+      final peer = _peerAt(DateTime.now().toUtc().subtract(
+            const Duration(hours: 2),
+          ));
+      expect(peer.isStale(), isTrue);
+    });
+  });
+
   group('PeerLocation.isApprox', () {
     test('true only for mode=approx', () {
       expect(_peerAt(DateTime.now(), mode: 'approx').isApprox, isTrue);

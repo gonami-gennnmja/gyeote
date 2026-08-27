@@ -62,6 +62,13 @@ class _LocationMapScreenState extends State<LocationMapScreen>
   GoogleMapController? _mapController;
   RealtimeChannel? _channel;
 
+  /// 피어가 브로드캐스트를 멈추면(상대가 앱을 껐거나 네트워크가 끊긴 상황 —
+  /// 위치가 "오래되는" 바로 그 경우) `_peers`는 그대로라 setState가 다시
+  /// 불리지 않고, `PeerLocation.isStale()`이 true로 바뀌어도 마커/칩이 흐려지지
+  /// 않는다(Rena 리뷰 P1). 화면이 살아 있는 동안 1분마다 빈 setState를 돌려
+  /// 신선도 판정을 다시 그리게 한다.
+  Timer? _staleTicker;
+
   Map<String, PeerLocation> _peers = {};
   List<HiddenPeer> _hiddenPeers = [];
   bool _isLoading = true;
@@ -73,11 +80,18 @@ class _LocationMapScreenState extends State<LocationMapScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _staleTicker = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) {
+        if (mounted) setState(() {});
+      },
+    );
     _refresh();
   }
 
   @override
   void dispose() {
+    _staleTicker?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _unsubscribeRealtime();
     super.dispose();
@@ -259,23 +273,7 @@ class _LocationMapScreenState extends State<LocationMapScreen>
     setState(() => _peers = {..._peers, userId: updated});
   }
 
-  Set<Marker> _buildMarkers() {
-    return _peers.values.map((peer) {
-      final position = LatLng(peer.position.latitude, peer.position.longitude);
-      return Marker(
-        markerId: MarkerId(peer.userId),
-        position: position,
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          peer.isApprox ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueAzure,
-        ),
-        infoWindow: InfoWindow(
-          title: peer.nickname,
-          snippet: '${peer.freshnessLabel()}'
-              '${peer.isApprox ? ' · 대략적 위치' : ''}',
-        ),
-      );
-    }).toSet();
-  }
+  Set<Marker> _buildMarkers() => buildPeerMarkers(_peers.values);
 
   Set<Circle> _buildApproxCircles() {
     // mode='approx'인 상대는 좌표 자체가 이미 서버에서 ~100m 격자로
@@ -416,6 +414,32 @@ class _LocationMapScreenState extends State<LocationMapScreen>
             ),
     );
   }
+}
+
+/// `_peers`의 각 피어를 지도 마커로 변환한다. 위젯/플랫폼을 띄우지 않고도
+/// 단위 테스트할 수 있도록 화면 밖 순수 함수로 뒀다(`hidden_peers.dart`,
+/// `shareModeDescription`과 같은 방식). `now`를 주입하면 그대로
+/// `PeerLocation.isStale`로 전달돼, "상대가 앱을 껐고 그 뒤로 시간만 흐른"
+/// 상황(receivedAt은 고정, now만 진행)을 테스트에서 재현할 수 있다.
+Set<Marker> buildPeerMarkers(Iterable<PeerLocation> peers, {DateTime? now}) {
+  return peers.map((peer) {
+    return Marker(
+      markerId: MarkerId(peer.userId),
+      position: LatLng(peer.position.latitude, peer.position.longitude),
+      icon: BitmapDescriptor.defaultMarkerWithHue(
+        peer.isApprox ? BitmapDescriptor.hueOrange : BitmapDescriptor.hueAzure,
+      ),
+      // 오래된 위치도 방금 위치와 똑같이 진하게 보이면 "지금 여기 있다"고
+      // 오해하기 쉽다(Din UX 리뷰 P1-3). 신선도 판단은 PeerLocation.isStale()
+      // 에 있고, 여기서는 그 결과로 alpha만 낮춘다.
+      alpha: peer.isStale(now: now) ? PeerLocation.staleOpacity : 1.0,
+      infoWindow: InfoWindow(
+        title: peer.nickname,
+        snippet: '${peer.freshnessLabel()}'
+            '${peer.isApprox ? ' · 대략적 위치' : ''}',
+      ),
+    );
+  }).toSet();
 }
 
 class _HiddenPeerChip extends StatelessWidget {
@@ -606,6 +630,9 @@ class _PeerSummaryChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isStale = peer.isStale();
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
@@ -613,7 +640,19 @@ class _PeerSummaryChip extends StatelessWidget {
         width: 160,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          // 오래된 위치는 배경을 톤다운한다(Din UX 리뷰 P1-3) — 지도를
+          // 훑어볼 때 텍스트를 일일이 읽지 않아도 방금 위치와 구분되게 하려는
+          // 것. 반투명(withOpacity)으로 두면 뒤 지도 타일이 비쳐 대비가
+          // 떨어지므로(Rena 리뷰 P2), 같은 색을 surface 위에 미리 합성해
+          // 불투명색으로 만든다. 톤다운 정도(staleOpacity)는 마커 alpha와
+          // 공유한다.
+          color: isStale
+              ? Color.alphaBlend(
+                  colorScheme.surfaceContainerHighest
+                      .withOpacity(PeerLocation.staleOpacity),
+                  colorScheme.surface,
+                )
+              : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -648,9 +687,15 @@ class _PeerSummaryChip extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const Spacer(),
+                if (isStale) ...[
+                  Icon(Icons.history, size: 12, color: colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 2),
+                ],
                 Text(
                   peer.freshnessLabel(),
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: isStale ? colorScheme.onSurfaceVariant : null,
+                      ),
                 ),
               ],
             ),
