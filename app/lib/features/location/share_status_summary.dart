@@ -64,3 +64,19 @@ class ShareStatusSummary {
     );
   }
 }
+
+/// 그룹 카드에서 선택된 공유 모드('off'/'precise'/'approx')에 대한 설명
+/// 한 줄(Din UX 리뷰 P1-1). SegmentedButton 레이블만으로는 "정밀"/"대략"의
+/// 실질적 차이(정확한 좌표 vs ~100m 격자 반올림)를 알 수 없다는 지적에 대한
+/// 대응이다.
+String shareModeDescription(String mode) {
+  switch (mode) {
+    case 'precise':
+      return '정확한 위치가 실시간으로 보여요.';
+    case 'approx':
+      return '실제 위치에서 반경 약 100m 이내로 뭉뚱그려 보여요.';
+    case 'off':
+    default:
+      return '이 그룹에는 내 위치가 전혀 보이지 않아요.';
+  }
+}

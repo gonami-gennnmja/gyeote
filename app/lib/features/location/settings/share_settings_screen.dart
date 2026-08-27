@@ -370,6 +370,13 @@ class _GroupShareCard extends StatelessWidget {
                     : (selection) => onModeSelected(selection.first),
               ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              shareModeDescription(setting.mode),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
             if (!setting.isOff) ...[
               const SizedBox(height: 12),
               if (setting.isPaused)
