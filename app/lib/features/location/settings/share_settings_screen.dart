@@ -386,7 +386,7 @@ class _GroupShareCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '${setting.pausedUntil!.toLocal()} 까지 일시중지됨',
+                        formatPausedUntil(setting.pausedUntil!),
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),

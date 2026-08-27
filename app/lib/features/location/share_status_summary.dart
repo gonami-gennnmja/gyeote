@@ -80,3 +80,23 @@ String shareModeDescription(String mode) {
       return '이 그룹에는 내 위치가 전혀 보이지 않아요.';
   }
 }
+
+/// 일시중지 종료 시각을 `DateTime.toLocal()` 원본 대신 사람이 읽기 쉬운
+/// 형태로 포맷한다(Din UX 리뷰 P1-2) — 오늘 안이면 "오후 3:32까지
+/// 일시중지됨", 다음날 이후면 "8/24 오후 3:32까지 일시중지됨" 형태. 프로젝트에
+/// `intl` 의존성이 없어 직접 계산한다.
+String formatPausedUntil(DateTime pausedUntil, {DateTime? now}) {
+  final local = pausedUntil.toLocal();
+  final reference = now ?? DateTime.now();
+  final isToday = local.year == reference.year &&
+      local.month == reference.month &&
+      local.day == reference.day;
+
+  final period = local.hour < 12 ? '오전' : '오후';
+  final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+  final minute = local.minute.toString().padLeft(2, '0');
+  final timeText = '$period $hour12:$minute';
+
+  final datePrefix = isToday ? '' : '${local.month}/${local.day} ';
+  return '$datePrefix$timeText까지 일시중지됨';
+}
