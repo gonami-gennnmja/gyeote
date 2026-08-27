@@ -52,7 +52,7 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
     } on RelationshipException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = '초대 정보를 불러오지 못했습니다. 다시 시도해주세요.');
+      setState(() => _errorMessage = '초대 정보를 불러오지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isPreviewLoading = false);
     }
@@ -76,7 +76,7 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
     } on PostgrestException catch (e) {
       setState(() => _errorMessage = _friendlyAcceptError(e.message));
     } catch (e) {
-      setState(() => _errorMessage = '초대 수락 중 문제가 발생했습니다. 다시 시도해주세요.');
+      setState(() => _errorMessage = '초대를 수락하지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isAccepting = false);
     }
@@ -84,16 +84,16 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
 
   String _friendlyAcceptError(String rawMessage) {
     if (rawMessage.contains('already a member')) {
-      return '이미 이 그룹의 멤버입니다.';
+      return '이미 이 그룹의 멤버예요.';
     }
     if (rawMessage.contains('expired')) {
-      return '만료된 초대입니다.';
+      return '만료된 초대예요.';
     }
     if (rawMessage.contains('not pending')) {
-      return '이미 처리되었거나 취소된 초대입니다.';
+      return '이미 처리됐거나 취소된 초대예요.';
     }
     if (rawMessage.contains('not found')) {
-      return '존재하지 않는 초대 코드입니다.';
+      return '존재하지 않는 초대 코드예요.';
     }
     return rawMessage;
   }
@@ -101,14 +101,14 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
   String _previewStatusMessage(InvitationPreview preview) {
     switch (preview.status) {
       case 'accepted':
-        return '이미 수락된 초대입니다.';
+        return '이미 수락된 초대예요.';
       case 'revoked':
-        return '취소된 초대입니다.';
+        return '취소된 초대예요.';
       case 'expired':
-        return '만료된 초대입니다.';
+        return '만료된 초대예요.';
       case 'pending':
         return preview.expiresAt.isBefore(DateTime.now())
-            ? '만료된 초대입니다.'
+            ? '만료된 초대예요.'
             : '';
       default:
         return '';

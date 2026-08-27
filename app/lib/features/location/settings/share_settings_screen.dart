@@ -139,10 +139,10 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
     } on PostgrestException catch (e) {
       _showSnackBar(_mapShareErrorMessage(
         e,
-        fallback: '공유 설정을 변경하지 못했습니다. 다시 시도해주세요.',
+        fallback: '공유 설정을 바꾸지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
-      _showSnackBar('공유 설정을 변경하지 못했습니다. 다시 시도해주세요.');
+      _showSnackBar('공유 설정을 바꾸지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -160,15 +160,15 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
         mode: currentMode,
         pauseMinutes: minutes,
       );
-      _showSnackBar('$minutes분 동안 위치 공유를 일시중지합니다.');
+      _showSnackBar('$minutes분 동안 위치 공유를 일시중지해요.');
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(_mapShareErrorMessage(
         e,
-        fallback: '일시중지 설정에 실패했습니다. 다시 시도해주세요.',
+        fallback: '일시중지하지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
-      _showSnackBar('일시중지 설정에 실패했습니다. 다시 시도해주세요.');
+      _showSnackBar('일시중지하지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -184,15 +184,15 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
         relationshipGroupId: group.id,
         mode: currentMode,
       );
-      _showSnackBar('공유를 다시 시작합니다.');
+      _showSnackBar('공유를 다시 시작했어요.');
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(_mapShareErrorMessage(
         e,
-        fallback: '공유를 다시 시작하지 못했습니다. 다시 시도해주세요.',
+        fallback: '공유를 다시 시작하지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
-      _showSnackBar('공유를 다시 시작하지 못했습니다. 다시 시도해주세요.');
+      _showSnackBar('공유를 다시 시작하지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -253,11 +253,10 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
               children: [
                 Card(
                   child: SwitchListTile(
-                    title: const Text('내 위치 수집'),
+                    title: const Text('내 위치 공유'),
                     subtitle: const Text(
-                      '이 기기의 위치를 주기적으로 서버에 전송합니다. '
-                      '실제로 상대에게 보이려면 아래에서 최소 한 그룹을 '
-                      '"정밀" 또는 "대략"으로 켜야 해요.',
+                      '이 스위치를 켜야 아래에서 켠 그룹에 내 위치가 전달돼요. '
+                      '그룹별 공개 범위(정밀·대략·끄기)는 아래에서 따로 설정해요.',
                     ),
                     value: _collector.isRunning,
                     onChanged: _isMutating ? null : _toggleCollector,
@@ -275,7 +274,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
                 if (data.groups.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 48),
-                    child: Center(child: Text('속한 관계 그룹이 없습니다.')),
+                    child: Center(child: Text('아직 속한 관계 그룹이 없어요.')),
                   )
                 else
                   ...data.groups.map(
@@ -349,7 +348,7 @@ class _GroupShareCard extends StatelessWidget {
             if (!collectorRunning) ...[
               const SizedBox(height: 8),
               Text(
-                '⚠ 위치 수집이 꺼져 있어 이 설정은 적용되지 않아요.',
+                '⚠ 내 위치 공유가 꺼져 있어 이 설정은 아직 적용되지 않아요.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),

@@ -51,7 +51,7 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     } on PostgrestException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = '그룹 생성 중 문제가 발생했습니다. 다시 시도해주세요.');
+      setState(() => _errorMessage = '그룹을 만들지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

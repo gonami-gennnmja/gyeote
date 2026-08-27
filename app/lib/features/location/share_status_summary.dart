@@ -24,7 +24,7 @@ class ShareStatusSummary {
     if (!collectorRunning) {
       return const ShareStatusSummary(
         tone: ShareStatusTone.off,
-        message: '현재 위치 공유가 꺼져 있어요. 아무에게도 보이지 않습니다.',
+        message: '현재 위치 공유가 꺼져 있어요. 아무에게도 보이지 않아요.',
       );
     }
 
@@ -36,7 +36,7 @@ class ShareStatusSummary {
     if (sharingGroups.isEmpty) {
       return const ShareStatusSummary(
         tone: ShareStatusTone.collectingOnly,
-        message: '위치 수집은 켜져 있지만, 아직 공유 중인 그룹이 없어요. 아래에서 그룹을 선택해주세요.',
+        message: '내 위치 공유는 켜져 있지만, 공유할 그룹을 아직 안 골랐어요. 아래에서 그룹을 켜주세요.',
       );
     }
 

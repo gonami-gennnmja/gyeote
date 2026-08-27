@@ -86,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             const Icon(Icons.favorite, size: 48),
             const SizedBox(height: 16),
-            Text('$email 님, 환영합니다.'),
+            Text('$email 님, 환영해요.'),
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: const Icon(Icons.groups),
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              '버킷리스트, 스토리 업로드 기능은 다음 라운드에서 추가됩니다.',
+              '버킷리스트, 스토리 업로드는 다음 업데이트에서 추가될 예정이에요.',
               textAlign: TextAlign.center,
             ),
           ],

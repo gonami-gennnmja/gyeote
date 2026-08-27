@@ -12,7 +12,7 @@ import '../widgets/role_badge.dart';
 /// 관계 그룹 상세 화면.
 ///
 /// - 멤버 목록(닉네임, role 배지)을 보여준다.
-/// - 본인이 owner인 경우에만 "멤버 추방" / "초대 만들기" 버튼을 노출한다.
+/// - 본인이 owner인 경우에만 "멤버 내보내기" / "초대 만들기" 버튼을 노출한다.
 ///   (백엔드 RPC 자체는 member도 초대를 만들 수 있도록 허용하지만, 화면
 ///   요구사항에 따라 owner로 한정해 노출한다.)
 /// - 누구나 본인 탈퇴가 가능하며, 실수 방지를 위해 확인 다이얼로그를 거친다.
@@ -64,7 +64,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     } on PostgrestException catch (e) {
       _showSnackBar(e.message);
     } catch (e) {
-      _showSnackBar('초대 생성 중 문제가 발생했습니다. 다시 시도해주세요.');
+      _showSnackBar('초대 코드를 만들지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -74,7 +74,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('초대 코드가 생성되었습니다'),
+        title: const Text('초대 코드를 만들었어요'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -95,7 +95,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               await Clipboard.setData(ClipboardData(text: inviteCode));
               if (context.mounted) {
                 Navigator.of(context).pop();
-                _showSnackBar('초대 코드를 복사했습니다.');
+                _showSnackBar('초대 코드를 복사했어요.');
               }
             },
             child: const Text('복사하고 닫기'),
@@ -111,9 +111,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Future<void> _removeMember(RelationshipMember member) async {
     final confirmed = await _showConfirmDialog(
-      title: '멤버 추방',
+      title: '멤버 내보내기',
       message: '${member.nickname}님을 그룹에서 내보낼까요?',
-      confirmLabel: '추방',
+      confirmLabel: '내보내기',
     );
     if (confirmed != true) return;
 
@@ -127,7 +127,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     } on PostgrestException catch (e) {
       _showSnackBar(e.message);
     } catch (e) {
-      _showSnackBar('멤버 추방 중 문제가 발생했습니다. 다시 시도해주세요.');
+      _showSnackBar('멤버를 내보내지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isMutating = false);
     }
@@ -136,7 +136,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Future<void> _leaveGroup() async {
     final confirmed = await _showConfirmDialog(
       title: '그룹 탈퇴',
-      message: '정말 이 그룹에서 나가시겠어요? 마지막 멤버라면 그룹이 삭제됩니다.',
+      message: '정말 이 그룹에서 나갈까요? 마지막 멤버가 나가면 그룹도 사라져요.',
       confirmLabel: '탈퇴',
     );
     if (confirmed != true) return;
@@ -149,7 +149,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       _showSnackBar(e.message);
       if (mounted) setState(() => _isMutating = false);
     } catch (e) {
-      _showSnackBar('탈퇴 중 문제가 발생했습니다. 다시 시도해주세요.');
+      _showSnackBar('그룹에서 나가지 못했어요. 다시 시도해주세요.');
       if (mounted) setState(() => _isMutating = false);
     }
   }
@@ -267,7 +267,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       trailing:
                           (isOwner && member.userId != currentUserId)
                               ? IconButton(
-                                  tooltip: '추방',
+                                  tooltip: '내보내기',
                                   icon: const Icon(Icons.person_remove),
                                   onPressed: _isMutating
                                       ? null

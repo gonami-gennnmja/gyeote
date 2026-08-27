@@ -103,7 +103,7 @@ class RelationshipRepository {
 
     final list = (rows as List).cast<Map<String, dynamic>>();
     if (list.isEmpty) {
-      throw const RelationshipException('존재하지 않는 초대 코드입니다.');
+      throw const RelationshipException('존재하지 않는 초대 코드예요.');
     }
 
     return InvitationPreview.fromJson(list.first);

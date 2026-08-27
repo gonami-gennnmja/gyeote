@@ -91,7 +91,7 @@ class _GroupListScreenState extends State<GroupListScreen> {
                   SizedBox(height: 120),
                   Center(
                     child: Text(
-                      '아직 속한 관계 그룹이 없습니다.\n오른쪽 아래 + 버튼으로 그룹을 만들거나,\n메일 아이콘으로 초대 코드를 입력해보세요.',
+                      '아직 속한 관계 그룹이 없어요.\n오른쪽 아래 + 버튼으로 그룹을 만들거나,\n메일 아이콘으로 초대 코드를 입력해보세요.',
                       textAlign: TextAlign.center,
                     ),
                   ),

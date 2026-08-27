@@ -57,7 +57,7 @@ class _SignupScreenState extends State<SignupScreen> {
         // 이메일 확인이 필요한 프로젝트 설정으로 가정하고 안내 후 로그인 화면으로 복귀.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('가입 확인 이메일을 보냈습니다. 이메일 확인 후 로그인해주세요.'),
+            content: Text('가입 확인 이메일을 보냈어요. 메일을 확인한 뒤 로그인해주세요.'),
           ),
         );
         Navigator.of(context).pop();
@@ -66,7 +66,7 @@ class _SignupScreenState extends State<SignupScreen> {
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = '회원가입 중 문제가 발생했습니다. 다시 시도해주세요.');
+      setState(() => _errorMessage = '회원가입 중 문제가 생겼어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -112,7 +112,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         return '비밀번호를 입력해주세요.';
                       }
                       if (value.length < 6) {
-                        return '비밀번호는 6자 이상이어야 합니다.';
+                        return '비밀번호는 6자 이상이어야 해요.';
                       }
                       return null;
                     },
@@ -124,7 +124,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     decoration: const InputDecoration(labelText: '비밀번호 확인'),
                     validator: (value) {
                       if (value != _passwordController.text) {
-                        return '비밀번호가 일치하지 않습니다.';
+                        return '비밀번호가 일치하지 않아요.';
                       }
                       return null;
                     },

@@ -361,7 +361,7 @@ class _LocationMapScreenState extends State<LocationMapScreen>
                             child: Padding(
                               padding: EdgeInsets.all(12),
                               child: Text(
-                                '아직 공유된 위치가 없습니다. 상대가 위치 공유를 켜면 여기에 표시돼요.',
+                                '아직 공유된 위치가 없어요. 상대가 위치 공유를 켜면 여기에 표시돼요.',
                                 textAlign: TextAlign.center,
                               ),
                             ),

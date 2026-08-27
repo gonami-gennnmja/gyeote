@@ -77,7 +77,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
             if (_lastResult == LocationPermissionResult.serviceDisabled) ...[
               const _StatusBanner(
                 icon: Icons.location_off,
-                message: '기기의 위치 서비스가 꺼져 있어요. 설정에서 켜주세요.',
+                message: '기기의 위치 서비스가 꺼져 있어요. 아래 "위치 서비스 설정 열기"에서 위치를 켜주세요.',
               ),
               const SizedBox(height: 12),
               OutlinedButton(
@@ -89,7 +89,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
                 LocationPermissionResult.permanentlyDenied) ...[
               const _StatusBanner(
                 icon: Icons.block,
-                message: '위치 권한이 거부되어 있어요. 설정 앱에서 권한을 허용해주세요.',
+                message: '위치 권한이 꺼져 있어요. 아래 "설정 앱 열기"를 눌러 권한 > 위치를 허용해주세요.',
               ),
               const SizedBox(height: 12),
               FilledButton(
@@ -100,19 +100,38 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
             ] else if (_lastResult == LocationPermissionResult.denied) ...[
               const _StatusBanner(
                 icon: Icons.info_outline,
-                message: '위치 권한이 거부되었어요. 다시 시도해주세요.',
+                message: '위치 권한이 거부됐어요. 아래 "위치 권한 다시 요청" '
+                    '버튼으로 한 번 더 요청할 수 있어요.',
               ),
               const SizedBox(height: 12),
             ],
             FilledButton.icon(
               icon: const Icon(Icons.my_location),
-              label: Text(_isRequesting ? '요청 중...' : '위치 권한 허용'),
+              // denied 상태에서는 라벨을 "다시 요청"으로 바꿔서 바로 위
+              // 배너 문구("아래 \"위치 권한 다시 요청\" 버튼으로…")와 말이
+              // 연결되게 한다(Din UX 리뷰 P1-4).
+              label: Text(
+                _isRequesting
+                    ? '요청 중…'
+                    : (_lastResult == LocationPermissionResult.denied
+                        ? '위치 권한 다시 요청'
+                        : '위치 권한 허용'),
+              ),
               onPressed: _isRequesting ? null : _requestPermission,
             ),
             const SizedBox(height: 8),
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
               child: const Text('나중에 하기'),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '지금 건너뛰면 위치 공유 기능을 쓸 수 없어요. '
+              '나중에 홈 화면의 "위치 공유 설정"에서 언제든 다시 켤 수 있어요.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
             ),
           ],
         ),

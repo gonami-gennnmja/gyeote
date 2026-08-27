@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = '로그인 중 문제가 발생했습니다. 다시 시도해주세요.');
+      setState(() => _errorMessage = '로그인 중 문제가 생겼어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         return '비밀번호를 입력해주세요.';
                       }
                       if (value.length < 6) {
-                        return '비밀번호는 6자 이상이어야 합니다.';
+                        return '비밀번호는 6자 이상이어야 해요.';
                       }
                       return null;
                     },
