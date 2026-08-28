@@ -35,11 +35,19 @@ class LocationMapScreen extends StatefulWidget {
     required this.groupName,
     this.repository,
     this.relationshipRepository,
+    this.clock,
     super.key,
   });
 
   final String groupId;
   final String groupName;
+
+  /// 테스트에서 "지금 시각"을 고정/조작하기 위한 선택적 시계. 프로덕션은
+  /// 그대로 두면(null) `DateTime.now`를 쓴다. 신선도 판정(`PeerLocation.isStale`)이
+  /// 1분 주기 타이머의 재렌더로만 갱신되므로(새 브로드캐스트 없이 오래되는
+  /// 경우), 그 재렌더가 실제로 마커/칩을 흐리게 만드는지 위젯 테스트로
+  /// 확인하려면 시각을 임계값 너머로 옮길 수단이 필요하다.
+  final DateTime Function()? clock;
 
   /// 테스트에서 가짜 repository를 주입하기 위한 선택적 파라미터. 프로덕션
   /// 호출부는 그대로 두면 되고(전달하지 않으면 null), null이면 지금까지와
@@ -273,7 +281,8 @@ class _LocationMapScreenState extends State<LocationMapScreen>
     setState(() => _peers = {..._peers, userId: updated});
   }
 
-  Set<Marker> _buildMarkers() => buildPeerMarkers(_peers.values);
+  Set<Marker> _buildMarkers() =>
+      buildPeerMarkers(_peers.values, now: widget.clock?.call());
 
   Set<Circle> _buildApproxCircles() {
     // mode='approx'인 상대는 좌표 자체가 이미 서버에서 ~100m 격자로
@@ -379,7 +388,11 @@ class _LocationMapScreenState extends State<LocationMapScreen>
                       itemCount: peers.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (context, index) =>
-                          _PeerSummaryChip(peer: peers[index], onTap: () => _focusOn(peers[index])),
+                          _PeerSummaryChip(
+                        peer: peers[index],
+                        now: widget.clock?.call(),
+                        onTap: () => _focusOn(peers[index]),
+                      ),
                     ),
                   ),
                 if (_hiddenPeers.isNotEmpty) ...[
@@ -596,10 +609,15 @@ class _ErrorState extends StatelessWidget {
 }
 
 class _PeerSummaryChip extends StatelessWidget {
-  const _PeerSummaryChip({required this.peer, required this.onTap});
+  const _PeerSummaryChip({required this.peer, required this.onTap, this.now});
 
   final PeerLocation peer;
   final VoidCallback onTap;
+
+  /// 신선도 판정 기준 시각. null이면 `PeerLocation`이 현재 시각을 쓴다.
+  /// 마커(`buildPeerMarkers`)와 같은 값을 받아 칩/마커의 "오래됨" 판정이
+  /// 어긋나지 않게 한다.
+  final DateTime? now;
 
   IconData get _batteryIcon {
     if (peer.isCharging == true) return Icons.battery_charging_full;
@@ -631,7 +649,7 @@ class _PeerSummaryChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isStale = peer.isStale();
+    final isStale = peer.isStale(now: now);
 
     return InkWell(
       onTap: onTap,
@@ -692,7 +710,7 @@ class _PeerSummaryChip extends StatelessWidget {
                   const SizedBox(width: 2),
                 ],
                 Text(
-                  peer.freshnessLabel(),
+                  peer.freshnessLabel(now: now),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: isStale ? colorScheme.onSurfaceVariant : null,
                       ),
