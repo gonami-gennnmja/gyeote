@@ -1,11 +1,15 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/server_error_message.dart';
 import '../../../location/map/location_map_screen.dart';
 import '../../data/models/relationship_group.dart';
 import '../../data/models/relationship_member.dart';
 import '../../data/relationship_repository.dart';
+import '../../data/server_error_messages.dart';
 import '../widgets/relationship_type_x.dart';
 import '../widgets/role_badge.dart';
 
@@ -62,7 +66,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       if (!mounted) return;
       await _showInviteCodeDialog(invitation.inviteCode);
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(mapServerErrorMessage(
+        e,
+        whitelist: relationshipGroupServerErrors,
+        fallback: '초대 코드를 만들지 못했어요. 다시 시도해주세요.',
+      ));
     } catch (e) {
       _showSnackBar('초대 코드를 만들지 못했어요. 다시 시도해주세요.');
     } finally {
@@ -125,7 +133,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       );
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(mapServerErrorMessage(
+        e,
+        whitelist: relationshipGroupServerErrors,
+        fallback: '멤버를 내보내지 못했어요. 다시 시도해주세요.',
+      ));
     } catch (e) {
       _showSnackBar('멤버를 내보내지 못했어요. 다시 시도해주세요.');
     } finally {
@@ -146,7 +158,11 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       await _repository.leaveGroup(widget.groupId);
       if (mounted) Navigator.of(context).pop();
     } on PostgrestException catch (e) {
-      _showSnackBar(e.message);
+      _showSnackBar(mapServerErrorMessage(
+        e,
+        whitelist: relationshipGroupServerErrors,
+        fallback: '그룹에서 나가지 못했어요. 다시 시도해주세요.',
+      ));
       if (mounted) setState(() => _isMutating = false);
     } catch (e) {
       _showSnackBar('그룹에서 나가지 못했어요. 다시 시도해주세요.');
@@ -198,7 +214,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('불러오지 못했습니다: ${snapshot.error}'));
+            // 원본 예외(snapshot.error)는 서버·인프라 원문이라 화면에 노출하지
+            // 않고 로그로만 남긴다(Din UX 리뷰 P0-7).
+            developer.log(
+              '그룹 상세 로드 실패',
+              name: 'GroupDetailScreen',
+              error: snapshot.error,
+              stackTrace: snapshot.stackTrace,
+            );
+            return const Center(
+              child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'),
+            );
           }
 
           final data = snapshot.data!;

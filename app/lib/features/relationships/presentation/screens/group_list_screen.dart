@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 
 import '../../data/models/relationship_group.dart';
@@ -78,7 +80,17 @@ class _GroupListScreenState extends State<GroupListScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('불러오지 못했습니다: ${snapshot.error}'));
+            // 원본 예외(snapshot.error)는 서버·인프라 원문이라 화면에 노출하지
+            // 않고 로그로만 남긴다(Din UX 리뷰 P0-7).
+            developer.log(
+              '관계 그룹 목록 로드 실패',
+              name: 'GroupListScreen',
+              error: snapshot.error,
+              stackTrace: snapshot.stackTrace,
+            );
+            return const Center(
+              child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'),
+            );
           }
 
           final groups = snapshot.data ?? const [];

@@ -1,46 +1,19 @@
+import 'dart:developer' as developer;
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/errors/server_error_message.dart';
 import '../../relationships/data/models/relationship_group.dart';
 import '../../relationships/data/relationship_repository.dart';
 import '../../relationships/presentation/widgets/relationship_type_x.dart';
 import '../collector/location_collector_service.dart';
 import '../data/location_repository.dart';
 import '../data/models/location_share_setting.dart';
+import '../data/server_error_messages.dart';
 import '../permission/location_permission_screen.dart';
 import '../permission/location_permission_service.dart';
 import '../share_status_summary.dart';
-
-/// `set_location_share_mode` RPC가 던지는 서버 원문 예외 메시지를 사용자
-/// 대상 한글 문구로 매핑한다(Din UX 리뷰 P0-5).
-///
-/// `_setMode`/`_pause`/`_resumeNow`가 지금까지 `PostgrestException.message`를
-/// 스낵바에 그대로 노출해왔다 — 위치 기능 마이그레이션 전체를 전수 조사한
-/// 결과 이 경로로 실제 도달 가능한 서버 메시지는 아래 4개뿐이었다(그중
-/// `not a member of this group`만 실사용 시나리오에서 실제로 트리거된다).
-/// 화이트리스트에 없는 메시지는 절대 원문을 그대로 흘려보내지 않고 항상
-/// 호출부가 넘긴 `fallback`으로 덮는다 — 매칭 실패가 곧 원문 노출로 이어지는
-/// 구조를 만들지 않기 위함이다. 판별은 `LocationRepository._isAllSharesOffError()`와
-/// 동일하게 `e.message`를 소문자로 바꿔 `contains()`로 매칭한다(백엔드가
-/// 전용 에러 코드를 아직 정의하지 않아 문자열 매칭이 현재 유일한 수단).
-String _mapShareErrorMessage(PostgrestException e, {required String fallback}) {
-  final message = e.message.toLowerCase();
-
-  if (message.contains('authentication required')) {
-    return '로그인이 만료됐어요. 다시 로그인해주세요.';
-  }
-  if (message.contains('not a member of this group')) {
-    return '더 이상 이 그룹의 멤버가 아니에요.';
-  }
-  if (message.contains('invalid mode:')) {
-    return '선택할 수 없는 모드예요. 다시 시도해주세요.';
-  }
-  if (message.contains('pause_minutes must be a positive integer')) {
-    return '일시중지 시간을 다시 선택해주세요.';
-  }
-
-  return fallback;
-}
 
 /// 관계 그룹별 위치 공유 모드(off/precise/approx)를 설정하는 화면.
 ///
@@ -137,8 +110,9 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       );
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(_mapShareErrorMessage(
+      _showSnackBar(mapServerErrorMessage(
         e,
+        whitelist: shareSettingsServerErrors,
         fallback: '공유 설정을 바꾸지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
@@ -163,8 +137,9 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _showSnackBar('$minutes분 동안 위치 공유를 일시중지해요.');
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(_mapShareErrorMessage(
+      _showSnackBar(mapServerErrorMessage(
         e,
+        whitelist: shareSettingsServerErrors,
         fallback: '일시중지하지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
@@ -187,8 +162,9 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _showSnackBar('공유를 다시 시작했어요.');
       _reload();
     } on PostgrestException catch (e) {
-      _showSnackBar(_mapShareErrorMessage(
+      _showSnackBar(mapServerErrorMessage(
         e,
+        whitelist: shareSettingsServerErrors,
         fallback: '공유를 다시 시작하지 못했어요. 다시 시도해주세요.',
       ));
     } catch (e) {
@@ -241,7 +217,18 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
           }
 
           if (snapshot.hasError) {
-            return Center(child: Text('불러오지 못했습니다: ${snapshot.error}'));
+            // 이 화면의 read는 전부 테이블 SELECT라 여기 담길 수 있는 예외는
+            // 우리가 매핑해 둔 한글 문구 대상이 아니라 인프라 레벨 영어 원문뿐이다
+            // (Din UX 리뷰 P0-7). 원문은 로그로만 남기고 화면엔 고정 문구만 보여준다.
+            developer.log(
+              '위치 공유 설정 로드 실패',
+              name: 'ShareSettingsScreen',
+              error: snapshot.error,
+              stackTrace: snapshot.stackTrace,
+            );
+            return const Center(
+              child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'),
+            );
           }
 
           final data = snapshot.data!;
