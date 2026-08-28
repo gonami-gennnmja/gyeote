@@ -21,7 +21,7 @@
 
 | 우선순위 | 개수 | 핵심 |
 |---|---|---|
-| P0 | 7건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 |
+| P0 | 8건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 (P0-8은 다음 라운드 이월) |
 | P1 | 7건 | 이해도/진입 흐름을 개선하는 항목 |
 | P2 | 6건 | 톤/디테일 다듬기 |
 
@@ -560,6 +560,82 @@ P0-7의 목적(원문 노출 경로를 한 군데로 모으기)과 같은 커밋
 `group_detail_screen`에서 `_showSnackBar(e.message)` 경로로 노출되지 않는다
 (현재 이 화면에 초대 취소 UI 없음). 초대 취소 UI가 생기면 그때 같은 헬퍼로
 감싼다.
+
+#### P0-7 구현 시 참고 — 시그니처를 `String`으로 잡아두면 P0-8이 쉬워진다
+
+아래 P0-8이 다룰 auth/회원가입/그룹 생성/초대 미리보기 경로도 결국 같은
+"화이트리스트 + 폴백" 처리가 필요하다. 그중 `AuthException`은
+`PostgrestException`과 **타입이 다르다.** `mapServerErrorMessage`가 예외 객체
+대신 **원문 `String`을 받도록** 시그니처를 잡아두면(`e.message` /
+`authException.message`를 호출부에서 꺼내 넘김), P0-8 착수 때 함수를 다시
+건드리지 않고 auth 화이트리스트만 추가하면 된다. 이번 커밋B에서 굳이
+`PostgrestException`으로 좁힐 이유가 없다.
+
+---
+
+### P0-8. 인증·회원가입·그룹 생성·초대 미리보기 경로의 서버 원문 노출 4곳 (Rena 재리뷰 ba77b1b 지적 → Din 전수 확인, 2026-08-28 / **다음 라운드, 이번 라운드 착수 안 함**)
+
+P0-7과 **정확히 같은 부류**(서버·인프라 원문 예외가 화면 문자열로 직행)인데
+P0-7 스코프(위치 공유 설정 + 관계 그룹 CRUD) 밖에 남아 있는 경로다. Rena는
+재리뷰에서 2곳을 짚었으나, Din이 전수로 확인한 결과 **4곳**이다.
+
+| # | 파일:행(P2-1 편집 전 기준) | 현재 코드 | 노출되는 원문 |
+|---|---|---|---|
+| 1 | `features/auth/presentation/screens/login_screen.dart:49-50` | `on AuthException catch (e) { setState(() => _errorMessage = e.message); }` | Supabase 인증 예외 영어 원문(`Invalid login credentials` 등) |
+| 2 | `features/auth/presentation/screens/signup_screen.dart:66-67` | 동일 패턴(`on AuthException` → `e.message`) | 가입 관련 인증 예외 영어 원문(`User already registered` 등) |
+| 3 | `features/relationships/presentation/screens/group_create_screen.dart:51-52` | `on PostgrestException catch (e) { setState(() => _errorMessage = e.message); }` | `create_relationship_group` RPC/인프라 원문 |
+| 4 | `features/relationships/presentation/screens/invitation_accept_screen.dart:50-51` | `on PostgrestException catch (e) { setState(() => _errorMessage = e.message); }` — **초대 미리보기(`getInvitationPreview`) 경로** | `get_invitation_preview` RPC/인프라 원문 |
+
+**4번이 특히 중요하다 — 한 파일 안에서 경로마다 처리가 갈려 있다.**
+같은 `invitation_accept_screen.dart`의 **수락 경로**(`_accept`, `:77`)는
+이미 `_friendlyAcceptError(e.message)`로 감싸는데, **미리보기 경로**(`:51`)만
+원문을 그대로 `_errorMessage`에 넣는다. 사용자 입장에선 같은 화면에서 코드를
+입력했는데 "미리보기가 뜰 때"와 "수락 버튼을 누를 때" 에러 문구 품질이
+달라진다.
+
+**`_friendlyAcceptError`(`:85`)는 세 번째 매핑 변종이다 — P0-8 착수 시 공용
+함수로 흡수해야 한다.** 이 함수는:
+- `mapServerErrorMessage`(P0-7 공용)와 별개로 존재하고,
+- `rawMessage.contains(...)`를 **`.toLowerCase()` 없이** 쓰며(대소문자 취급이 다름),
+- **폴백이 `return rawMessage`** 라, 매칭 안 되면 원문을 그대로 흘린다
+  (`mapServerErrorMessage`는 안전한 한글 `fallback`을 반환 — 이게 핵심 차이).
+
+즉 커밋B에서 `_mapShareErrorMessage`를 공용 함수로 이관해 없앤 "안전장치가
+두 벌" 문제가, `_friendlyAcceptError`를 방치하면 **세 벌로 되살아난다.**
+P0-8은 `_friendlyAcceptError`도 `mapServerErrorMessage` + 초대 도메인
+화이트리스트(예: `invitationServerErrors`)로 대체하고, `_accept`(:77)와
+미리보기(:51) 두 경로가 같은 함수를 타게 한다.
+
+**`AuthException`은 화이트리스트를 따로 만들어야 한다.** `AuthException`
+(supabase_flutter auth)은 `PostgrestException`과 타입이 다르고 메시지 문구
+체계도 다르다(GoTrue 영어 메시지). P0-8은 auth 전용 화이트리스트
+(예: `authServerErrors`: `invalid login credentials` → "이메일 또는 비밀번호가
+올바르지 않아요.", `user already registered` → "이미 가입된 이메일이에요.",
+`email not confirmed` → "메일 인증을 먼저 완료해주세요." 등 — 착수 시
+supabase_flutter가 던지는 메시지를 전수 확인해 확정)을 만들고, 위 P0-7 참고
+노트대로 `mapServerErrorMessage`가 원문 `String`을 받게 돼 있으면 그대로
+재사용한다.
+
+**착수 시 해야 할 전수 조사**: `get_invitation_preview` /
+`create_relationship_group` / `accept_relationship_invitation`의
+`raise exception` 메시지를 `090006_relationship_functions.sql` +
+`100001_fix_invitation_email_check.sql`에서 전부 뽑아 초대/그룹생성 도메인
+화이트리스트를 확정한다(P0-5·P0-7과 같은 방식). 알려진 것만 미리 적어두면:
+`accept_relationship_invitation` → `invitation not found` /
+`invitation is not pending (status: %)` / `invitation has expired` /
+`already a member of this group` / `invitation is scoped to a different email address` /
+`authentication required`.
+
+**제외 (누출 아님)**: `invitation_accept_screen.dart:52-53`의
+`on RelationshipException catch (e) { setState(() => _errorMessage = e.message); }`
+는 서버 원문 노출이 **아니다.** `RelationshipException`은 앱이 직접 던지는
+예외이고(`relationship_repository.dart:106`), 메시지가 이미 우리가 쓴 한글
+문구(P2-1 반영 후 `'존재하지 않는 초대 코드예요.'`)다. 그대로 화면에 띄워도
+문제없다 — P0-8 대상에서 뺀다.
+
+**범위 재확인**: P0-8은 위 4곳 + `_friendlyAcceptError` 흡수까지다. 이번
+라운드(ba77b1b 기준 카피·톤 커밋 + P0-7 커밋B)에는 **착수하지 않는다** —
+다음 라운드 티켓으로만 남긴다.
 
 ---
 
