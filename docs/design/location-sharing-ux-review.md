@@ -21,9 +21,9 @@
 
 | 우선순위 | 개수 | 핵심 |
 |---|---|---|
-| P0 | 6건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 |
+| P0 | 7건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 |
 | P1 | 7건 | 이해도/진입 흐름을 개선하는 항목 |
-| P2 | 5건 | 톤/디테일 다듬기 |
+| P2 | 6건 | 톤/디테일 다듬기 |
 
 ---
 
@@ -390,6 +390,177 @@ HIGH-1 수정, 100003의 E 수정) 다음 라운드 티켓이 다시 다룰 필�
 `p_relationship_group_id`). 로스터는 이미 있는
 `RelationshipRepository.fetchGroupMembers(groupId)`를 재사용.
 
+### P0-7. 서버/인프라 원문 예외가 화면에 그대로 노출되는 경로 6곳 (Plexa 요청, 2026-08-27 추가 / 2026-08-27 6곳으로 확장)
+
+P0-4(지도 화면)·P0-5(공유 설정 스낵바)와 **정확히 같은 결함 종류** — 서버·
+인프라 원문 예외(영어 메시지, PostgREST 코드, 스택트레이스성 텍스트, 내부
+함수명)가 화면까지 올라오는 경로다. P0-4/P0-5만 고치고 나머지를 남겨두면
+"서버 원문은 화면에 노출되지 않는다"는 방어가 화면마다 들쭉날쭉해진다.
+
+원래 이 중 읽기 경로 3곳은 카피·톤 작업(P2-1) 표에 `${snapshot.error}` 보간
+제거를 묻어서 처리하려 했으나, Plexa 판단으로 **별도 P0 항목으로 분리**한다 —
+카피 커밋에 섞이면 "이 보안성 수정이 언제·왜 됐는지"가 이력에서 안 보이기
+때문이다. **Diana가 커밋B 하나로 6곳을 함께 처리**한다(티켓 granularity =
+"한 커밋에서 같이 닫히느냐" 기준이라, 읽기/쓰기를 별도 티켓으로 쪼개지
+않는다).
+
+전수 grep 결과 대상은 아래 **6곳**이고, **경로에 따라 처방이 다르다**.
+
+#### 읽기 경로 3곳 — P0-4 방식 (고정 문구, 원본은 로그로만)
+
+`FutureBuilder`의 `snapshot.hasError` 분기에서
+`Text('불러오지 못했습니다: ${snapshot.error}')`로 예외 객체를 문자열
+보간한다. 세 화면이 호출하는 read 메서드
+(`fetchMyGroups`/`fetchGroup`/`fetchGroupMembers`/`fetchMyShareSettings`)는
+전부 `.from(...)` 테이블 SELECT라 `raise exception`이 없다 — 즉 여기 담길 수
+있는 `PostgrestException.message`는 우리가 정의한 안전한 한글 매핑 대상이
+아니라 항상 Postgres/PostgREST 인프라 레벨 영어 원문뿐이다(P0-4의 "서버 예외
+메시지 전수 조사" 결론이 그대로 적용). **화이트리스트로 걸러도 통과할 문구가
+없으므로 `e.message`를 보조 텍스트로도 노출하지 않는다.**
+
+처방: `${snapshot.error}` 보간을 제거하고 고정 한글 문구만 남긴다. 원본
+예외는 `developer.log`(P0-4의 `_refresh` catch 블록과 동일한 방식)로만 남긴다.
+
+| 파일:행 | 현재 | 확정 |
+|---|---|---|
+| `share_settings_screen.dart:244` | `Center(child: Text('불러오지 못했습니다: ${snapshot.error}'))` | `Center(child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'))` |
+| `group_list_screen.dart:81` | `Center(child: Text('불러오지 못했습니다: ${snapshot.error}'))` | `Center(child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'))` |
+| `group_detail_screen.dart:201` | `Center(child: Text('불러오지 못했습니다: ${snapshot.error}'))` | `Center(child: Text('불러오지 못했어요. 잠시 후 다시 시도해주세요.'))` |
+
+문구는 P2-1(해요체) 원칙에도 맞으므로 이 커밋으로 톤까지 함께 정리된다 —
+**P2-1 표에서는 이 3행을 제외했다(P0-7이 소유)**. 가능하면 P0-4의
+`_ErrorState`처럼 아이콘 + "다시 시도" 버튼까지 붙이면 더 좋지만,
+`FutureBuilder` 재조회 동선(`setState`로 future 재생성)이 화면마다 필요하므로
+1차는 고정 문구 교체 + 로그만으로 충분하다(버튼까지는 Diana 재량).
+
+#### 쓰기 경로 3곳 — P0-5 방식 (화이트리스트 매핑 + 매칭 실패 시 폴백 문구로 덮기)
+
+모두 `group_detail_screen.dart`이며, `on PostgrestException catch (e)`
+블록에서 `_showSnackBar(e.message)`로 서버 원문을 스낵바에 직행시킨다.
+호출하는 RPC는 `raise exception`이 있는 함수(`090006_relationship_functions.sql`)라
+읽기 경로와 달리 **우리가 정의한 도달 가능한 한글 매핑 대상이 존재한다** —
+즉 P0-5(`share_settings_screen.dart`의 `_mapShareErrorMessage`)와 같은
+"화이트리스트 + 폴백" 처리가 필요하다.
+
+**구조 정정 (Plexa 지적, 2026-08-27)**: `_mapShareErrorMessage`를 본떠
+`_mapGroupErrorMessage`를 **새로 만들면 안 된다.** 그러면 "매칭 안 된
+메시지는 반드시 폴백으로 덮는다"는 안전장치가 두 벌이 되고, 나중에 한쪽만
+고쳐지면 다른 쪽으로 원문이 샌다. 게다가 `_mapShareErrorMessage`는
+`share_settings_screen.dart` 파일 private(`_` 접두)이라 재사용도 안 된다.
+
+- **도메인마다 다른 것** = 화이트리스트 *내용*(공유 설정 RPC 메시지 vs 관계
+  그룹 RPC 메시지).
+- **절대 두 벌이 되면 안 되는 것** = 매칭 방식(소문자 `contains`)과 폴백
+  보장 메커니즘.
+
+따라서 **공용 함수 1개 + 도메인 데이터 2개**로 간다.
+
+**① 공용 모듈** — 신규 파일 `app/lib/core/errors/server_error_message.dart`
+
+```dart
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// PostgREST가 전달한 서버 예외 메시지를, 미리 정의한 화이트리스트에 있으면
+/// 사용자용 한글 문구로 바꾸고, **없으면 무조건 `fallback`으로 덮는다.**
+/// 서버가 던진 원문이 화면에 그대로 노출되는 경로를 한 군데에서 차단하기
+/// 위한 유일한 진입점이다(Din UX 리뷰 P0-4/P0-5/P0-7). 도메인별로 다른 것은
+/// `whitelist`의 내용뿐이고, "매칭 방식(소문자 contains) + 매칭 실패 시 폴백
+/// 보장"은 이 함수 하나로만 존재한다 — 도메인마다 비슷한 함수를 복제하지 말 것.
+///
+/// 판별이 문자열 `contains`인 이유: 백엔드가 아직 전용 에러 코드(errcode/detail)를
+/// 정의하지 않아, plain `raise exception` 메시지 매칭이 현재로선 유일한 수단이다.
+/// 백엔드가 에러 코드를 붙이면 이 함수의 매칭을 코드 기반으로 바꾸면 되고,
+/// 호출부와 도메인 데이터는 그대로 둘 수 있다.
+///
+/// `whitelist`는 삽입 순서대로 검사된다(첫 매칭 채택). 한 키가 다른 키의
+/// 부분문자열이면 더 구체적인 것을 앞에 둘 것.
+///
+/// 참고: `LocationRepository._isAllSharesOffError()`도 같은 "소문자 contains"
+/// 관행을 쓰지만 그건 메시지 *매핑*이 아니라 정상 상태 여부의 *불리언 판별*이라
+/// 목적이 달라 이 함수로 합치지 않는다 — 관행만 같다.
+String mapServerErrorMessage(
+  PostgrestException e, {
+  required Map<String, String> whitelist,
+  required String fallback,
+}) {
+  final message = e.message.toLowerCase();
+  for (final entry in whitelist.entries) {
+    if (message.contains(entry.key)) return entry.value;
+  }
+  return fallback;
+}
+```
+
+**② 도메인 데이터 2개** — 각 feature 안에 상수로 둔다(공용 모듈은 데이터를
+모른다).
+
+```dart
+// app/lib/features/location/data/server_error_messages.dart (또는
+// share_settings_screen.dart 파일 상단 — 위치는 Diana 재량, 단 재사용 가능하게
+// public 또는 최소 라이브러리 스코프로)
+const shareSettingsServerErrors = <String, String>{
+  'authentication required': '로그인이 만료됐어요. 다시 로그인해주세요.',
+  'not a member of this group': '더 이상 이 그룹의 멤버가 아니에요.',
+  'invalid mode:': '선택할 수 없는 모드예요. 다시 시도해주세요.',
+  'pause_minutes must be a positive integer': '일시중지 시간을 다시 선택해주세요.',
+};
+
+// app/lib/features/relationships/... 안에
+const relationshipGroupServerErrors = <String, String>{
+  'authentication required': '로그인이 만료됐어요. 다시 로그인해주세요.',
+  'only members of the group can create invitations':
+      '이 그룹의 멤버만 초대 코드를 만들 수 있어요.',
+  'not a member of this group': '더 이상 이 그룹의 멤버가 아니에요.',
+  'only the group owner can remove members':
+      '그룹을 만든 사람만 멤버를 내보낼 수 있어요.',
+  'use leave_relationship_group': '자기 자신은 "그룹 탈퇴"로 나가야 해요.',
+};
+```
+
+**③ 기존 P0-5 코드도 이 공용 함수로 옮긴다(같은 커밋B).** 현재
+`share_settings_screen.dart`의 `_mapShareErrorMessage`(if/else 4단)는
+`mapServerErrorMessage(e, whitelist: shareSettingsServerErrors, fallback: …)`
+호출로 대체한다. `_mapShareErrorMessage`라는 파일 private 래퍼를 남겨도 되고
+(본문만 공용 함수 위임), 3개 호출부에서 직접 공용 함수를 불러도 된다 — 어느
+쪽이든 **매칭+폴백 로직의 사본이 코드에 하나만 있으면 된다.** 이 이관은
+P0-7의 목적(원문 노출 경로를 한 군데로 모으기)과 같은 커밋에 들어가는 게 맞다.
+
+전수 조사 결과 관계 그룹 3개 RPC가 `raise exception`으로 던지는 메시지 전부
+(위 `relationshipGroupServerErrors`가 이 표를 그대로 반영한다):
+
+| RPC | 원문 메시지 | 실사용 도달 가능? | 확정 카피 |
+|---|---|---|---|
+| `create_relationship_invitation` | `authentication required` | 사실상 불가(이 화면 = 유효 세션) | `'로그인이 만료됐어요. 다시 로그인해주세요.'` |
+| `create_relationship_invitation` | `only members of the group can create invitations` | 드묾(초대 버튼은 owner에게만 노출 → owner는 항상 멤버, 화면 열어둔 채 제외되는 경쟁 상황만) | `'이 그룹의 멤버만 초대 코드를 만들 수 있어요.'` |
+| `leave_relationship_group` | `authentication required` | 사실상 불가 | `'로그인이 만료됐어요. 다시 로그인해주세요.'` |
+| `leave_relationship_group` | `not a member of this group` | **예 — 화면 열어둔 채 다른 기기/멤버가 나를 내보내면 도달** | `'더 이상 이 그룹의 멤버가 아니에요.'` |
+| `remove_relationship_member` | `authentication required` | 사실상 불가 | `'로그인이 만료됐어요. 다시 로그인해주세요.'` |
+| `remove_relationship_member` | `use leave_relationship_group() to remove yourself` | 사실상 불가(내보내기 버튼은 `member.userId != currentUserId`일 때만 노출) — 도달해도 내부 함수명이 그대로 새므로 매핑 필수 | `'자기 자신은 "그룹 탈퇴"로 나가야 해요.'` |
+| `remove_relationship_member` | `only the group owner can remove members` | 드묾(내보내기 버튼은 owner에게만 노출 → 소유권 이전 기능이 아직 없어 경쟁 상황도 거의 없음) | `'그룹을 만든 사람만 멤버를 내보낼 수 있어요.'` |
+
+처방: 세 호출부의 `on PostgrestException catch (e)` 블록을 아래로 바꾼다.
+공용 함수 `mapServerErrorMessage`에 관계 그룹 도메인 데이터
+(`relationshipGroupServerErrors`)와 각 호출부의 `fallback`(= P2-1에서 해요체로
+정리된 기존 폴백 문구)을 넘긴다. 매칭 안 되는 나머지는 `fallback`으로 덮인다.
+
+| 파일:행 | 현재 | 확정 |
+|---|---|---|
+| `group_detail_screen.dart:65` (`_createInvitation`) | `_showSnackBar(e.message);` | `_showSnackBar(mapServerErrorMessage(e, whitelist: relationshipGroupServerErrors, fallback: '초대 코드를 만들지 못했어요. 다시 시도해주세요.'));` |
+| `group_detail_screen.dart:128` (`_removeMember`) | `_showSnackBar(e.message);` | `_showSnackBar(mapServerErrorMessage(e, whitelist: relationshipGroupServerErrors, fallback: '멤버를 내보내지 못했어요. 다시 시도해주세요.'));` |
+| `group_detail_screen.dart:149` (`_leaveGroup`) | `_showSnackBar(e.message);` | `_showSnackBar(mapServerErrorMessage(e, whitelist: relationshipGroupServerErrors, fallback: '그룹에서 나가지 못했어요. 다시 시도해주세요.'));` |
+
+> 각 호출부의 `} catch (e) {` (비-Postgrest) 폴백 문구(`:67`, `:130`, `:152`)는
+> P2-1 표에서 이미 해요체로 정리 대상이다 — 위 `fallback:` 인자 문구와
+> **글자까지 동일하게** 맞춰서, Postgrest든 아니든 사용자가 보는 문구가
+> 같도록 한다.
+
+#### `revokeInvitation`는 이번 범위 아님
+
+`RelationshipRepository.revokeInvitation`(`:123`)도 쓰기 RPC지만
+`group_detail_screen`에서 `_showSnackBar(e.message)` 경로로 노출되지 않는다
+(현재 이 화면에 초대 취소 UI 없음). 초대 취소 UI가 생기면 그때 같은 헬퍼로
+감싼다.
+
 ---
 
 ## P1 — 이해도·진입 흐름 개선
@@ -575,3 +746,307 @@ GoogleMap의 팬 제스처와 충돌할 수 있어 AppBar 아이콘 유지 + 존
   자체는 자유롭게 다듬어도 된다.
 - 순서 제안: P0 전체 → P1-1/P1-2(그룹 카드 관련, P0-2와 같은 위젯) → 나머지
   P1 → P2.
+
+---
+
+## 카피·톤 확정 (Din, 2026-08-27)
+
+Plexa 배분으로 아래 문구를 **확정**한다: P1-7(내부 용어 "위치 수집" 대체),
+P2-1(해요체/합쇼체 통일), P2-5("정밀" 표기 통일), P1-4(권한 거부 재시도 안내
+강화), P2-6("추방" → "내보내기" 어휘 순화, Plexa 승인 2026-08-27). 아래 문구는
+Diana가 **그대로 붙여넣을 수 있는 최종안**이다. 톤만 지키면 자유롭게 다듬어도
+된다는 기존 단서(위 "Diana 구현 시 참고")보다 이 섹션이 우선한다 — 이 항목들의
+문구는 이대로 확정한다.
+
+**P0-7 관계**: 서버·인프라 원문 예외가 화면까지 노출되는 6곳(읽기 경로 3 +
+쓰기 경로 3)은 Plexa 판단으로 **P0-7로 분리**됐다(위 P0 섹션 참고). 이 중
+읽기 경로 3곳(`'불러오지 못했습니다: ${snapshot.error}'`)은 원래 아래 P2-1
+표에 있었으나 제외했고, 쓰기 경로 3곳(`group_detail_screen.dart`의
+`_showSnackBar(e.message)`)은 이번에 새로 합류했다. Diana가 커밋B 하나로 6곳을
+함께 처리한다.
+
+### 용어 원칙 (P1-7 + P2-5 공통)
+
+곁에의 위치 기능 사용자 문구에서 쓰는 단어를 아래로 고정한다.
+
+| 개념 | 쓸 단어 | 쓰지 않을 단어 |
+|---|---|---|
+| 기능·상태를 가리키는 명사 | **공유** ("위치 공유", "공유 중", "공유 꺼짐", "내 위치 공유") | "수집", "전송" |
+| 내 위치 데이터가 상대에게 가는 동작 | **보여요 / 전달돼요** | "전송돼요", "송신" |
+| 그룹별 공개 정확도 모드 | **정밀 / 대략 / 끄기** (고정) | "정확", "상세", "러프" |
+
+- "수집"·"전송"은 개발자 관점 용어(collector)다. 코드 식별자
+  (`LocationCollectorService`, `_toggleCollector`, `location_collector_service.dart`
+  등)와 `developer.log` name 문자열은 **그대로 둔다** — 사용자에게 보이는
+  문자열만 통일 대상이다.
+- "정밀"은 **모드의 이름**이다. 설명 문장 안에서 "정확한 위치"처럼 결과를
+  풀어 설명하는 표현은 허용하지만(예: `shareModeDescription('precise')`의
+  "정확한 위치가 실시간으로 보여요."는 유지), 모드를 **지칭**할 때는 항상
+  "정밀"이라고 쓴다. 기획 문서·QA 테스트 케이스명·디자인 문서도 전부
+  "정밀"로 통일한다(현재 구현 표기를 표준으로 채택). "정확 모드",
+  "정확도 높음" 같은 표현은 쓰지 않는다.
+
+### P1-7. "위치 수집" → "내 위치 공유"
+
+**파일**: `app/lib/features/location/settings/share_settings_screen.dart`,
+`app/lib/features/location/share_status_summary.dart`
+
+`share_settings_screen.dart:256` — 상단 스위치 title
+
+```
+현재: title: const Text('내 위치 수집'),
+확정: title: const Text('내 위치 공유'),
+```
+
+`share_settings_screen.dart:257-261` — 같은 스위치 subtitle (합쇼체 "전송합니다"도 함께 정리)
+
+```
+현재:
+  subtitle: const Text(
+    '이 기기의 위치를 주기적으로 서버에 전송합니다. '
+    '실제로 상대에게 보이려면 아래에서 최소 한 그룹을 '
+    '"정밀" 또는 "대략"으로 켜야 해요.',
+  ),
+
+확정:
+  subtitle: const Text(
+    '이 스위치를 켜야 아래에서 켠 그룹에 내 위치가 전달돼요. '
+    '그룹별 공개 범위(정밀·대략·끄기)는 아래에서 따로 설정해요.',
+  ),
+```
+
+`share_settings_screen.dart:352` — P0-2 경고 문구(수집 → 공유)
+
+```
+현재: '⚠ 위치 수집이 꺼져 있어 이 설정은 적용되지 않아요.',
+확정: '⚠ 내 위치 공유가 꺼져 있어 이 설정은 아직 적용되지 않아요.',
+```
+
+`share_status_summary.dart:39` — collectingOnly 케이스 메시지(수집 → 공유)
+
+```
+현재:
+  message: '위치 수집은 켜져 있지만, 아직 공유 중인 그룹이 없어요. 아래에서 그룹을 선택해주세요.',
+확정:
+  message: '내 위치 공유는 켜져 있지만, 공유할 그룹을 아직 안 골랐어요. 아래에서 그룹을 켜주세요.',
+```
+
+이 4곳을 바꾸면 위치 기능에서 사용자에게 보이는 "수집"·"전송"이 모두 없어진다
+(2026-08-27 기준 전수 확인: 위 4곳 + subtitle 1곳이 전부).
+
+### P2-1. 해요체로 통일
+
+**톤 원칙**
+
+- 앱 전체 사용자 문구는 **해요체**로 통일한다 — "~해요", "~돼요", "~있어요",
+  "~예요/이에요", "~까요?". 커플·가족·친구 대상 앱이라 합쇼체("~습니다",
+  "~합니다")보다 해요체가 제품 톤에 맞는다.
+- **예외 1 (명사구 제목)**: AppBar 타이틀·다이얼로그 제목 등 명사로 끝나는
+  라벨은 그대로 둔다 — "위치 권한", "위치 공유 설정", "그룹 상세",
+  "멤버 내보내기"(P2-6로 "추방"에서 변경), "그룹 탈퇴".
+- **예외 2 (버튼·세그먼트 라벨)**: 명사 또는 동사원형으로 끝나는 짧은 액션
+  라벨은 그대로 둔다 — "다시 시도", "다시 로그인", "닫기", "복사하고 닫기",
+  "끄기", "정밀", "대략", "즉시 재개", "N분만 일시중지".
+- **예외 3 (개발자 전용 문자열)**: 사용자에게 렌더되지 않는 문자열은 대상이
+  아니다 — `developer.log`의 `name`/메시지, `FormatException`·`Exception`
+  생성자 메시지(예: `geo_point.dart:57` "알 수 없는 geography 형식입니다: …").
+- **마침표**: 스낵바·배너처럼 완결된 안내 문장은 마침표를 유지하고, 한 줄
+  캡션·버튼 라벨은 마침표를 생략한다.
+
+**화면별 수정 카피 표** — `현재` 문자열을 `확정` 문자열로 그대로 교체.
+행 경로는 `app/lib/` 기준. 줄 번호는 2026-08-27 기준이며, 편집 중 밀리면
+문자열로 찾는다.
+
+파일:행 오름차순(경로 알파벳 → 줄 번호)으로 정렬했다 — Diana가 한 파일씩
+훑으며 위→아래로 치환하면 된다.
+
+| 파일:행 | 현재 | 확정 |
+|---|---|---|
+| `features/auth/presentation/screens/login_screen.dart:52` | `'로그인 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'로그인 중 문제가 생겼어요. 다시 시도해주세요.'` |
+| `features/auth/presentation/screens/login_screen.dart:109` | `'비밀번호는 6자 이상이어야 합니다.'` | `'비밀번호는 6자 이상이어야 해요.'` |
+| `features/auth/presentation/screens/signup_screen.dart:60` | `'가입 확인 이메일을 보냈습니다. 이메일 확인 후 로그인해주세요.'` | `'가입 확인 이메일을 보냈어요. 메일을 확인한 뒤 로그인해주세요.'` |
+| `features/auth/presentation/screens/signup_screen.dart:69` | `'회원가입 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'회원가입 중 문제가 생겼어요. 다시 시도해주세요.'` |
+| `features/auth/presentation/screens/signup_screen.dart:115` | `'비밀번호는 6자 이상이어야 합니다.'` | `'비밀번호는 6자 이상이어야 해요.'` |
+| `features/auth/presentation/screens/signup_screen.dart:127` | `'비밀번호가 일치하지 않습니다.'` | `'비밀번호가 일치하지 않아요.'` |
+| `features/home/presentation/screens/home_screen.dart:89` | `'$email 님, 환영합니다.'` | `'$email 님, 환영해요.'` |
+| `features/home/presentation/screens/home_screen.dart:134` | `'버킷리스트, 스토리 업로드 기능은 다음 라운드에서 추가됩니다.'` | `'버킷리스트, 스토리 업로드는 다음 업데이트에서 추가될 예정이에요.'` |
+| `features/location/map/location_map_screen.dart:371` | `'아직 공유된 위치가 없습니다. 상대가 위치 공유를 켜면 여기에 표시돼요.'` | `'아직 공유된 위치가 없어요. 상대가 위치 공유를 켜면 여기에 표시돼요.'` |
+| `features/location/settings/share_settings_screen.dart:142` | `fallback: '공유 설정을 변경하지 못했습니다. 다시 시도해주세요.',` | `fallback: '공유 설정을 바꾸지 못했어요. 다시 시도해주세요.',` |
+| `features/location/settings/share_settings_screen.dart:145` | `'공유 설정을 변경하지 못했습니다. 다시 시도해주세요.'` | `'공유 설정을 바꾸지 못했어요. 다시 시도해주세요.'` |
+| `features/location/settings/share_settings_screen.dart:163` | `'$minutes분 동안 위치 공유를 일시중지합니다.'` | `'$minutes분 동안 위치 공유를 일시중지해요.'` |
+| `features/location/settings/share_settings_screen.dart:168` | `fallback: '일시중지 설정에 실패했습니다. 다시 시도해주세요.',` | `fallback: '일시중지하지 못했어요. 다시 시도해주세요.',` |
+| `features/location/settings/share_settings_screen.dart:171` | `'일시중지 설정에 실패했습니다. 다시 시도해주세요.'` | `'일시중지하지 못했어요. 다시 시도해주세요.'` |
+| `features/location/settings/share_settings_screen.dart:187` | `'공유를 다시 시작합니다.'` | `'공유를 다시 시작했어요.'` |
+| `features/location/settings/share_settings_screen.dart:192` | `fallback: '공유를 다시 시작하지 못했습니다. 다시 시도해주세요.',` | `fallback: '공유를 다시 시작하지 못했어요. 다시 시도해주세요.',` |
+| `features/location/settings/share_settings_screen.dart:195` | `'공유를 다시 시작하지 못했습니다. 다시 시도해주세요.'` | `'공유를 다시 시작하지 못했어요. 다시 시도해주세요.'` |
+| `features/location/settings/share_settings_screen.dart:278` | `'속한 관계 그룹이 없습니다.'` | `'아직 속한 관계 그룹이 없어요.'` |
+| `features/location/share_status_summary.dart:27` | `'현재 위치 공유가 꺼져 있어요. 아무에게도 보이지 않습니다.'` | `'현재 위치 공유가 꺼져 있어요. 아무에게도 보이지 않아요.'` |
+| `features/relationships/data/relationship_repository.dart:106` | `'존재하지 않는 초대 코드입니다.'` | `'존재하지 않는 초대 코드예요.'` |
+| `features/relationships/presentation/screens/group_create_screen.dart:54` | `'그룹 생성 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'그룹을 만들지 못했어요. 다시 시도해주세요.'` |
+| `features/relationships/presentation/screens/group_detail_screen.dart:67` | `'초대 생성 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'초대 코드를 만들지 못했어요. 다시 시도해주세요.'` |
+| `features/relationships/presentation/screens/group_detail_screen.dart:77` | `const Text('초대 코드가 생성되었습니다')` | `const Text('초대 코드를 만들었어요')` |
+| `features/relationships/presentation/screens/group_detail_screen.dart:98` | `'초대 코드를 복사했습니다.'` | `'초대 코드를 복사했어요.'` |
+| `features/relationships/presentation/screens/group_detail_screen.dart:130` | `'멤버 추방 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'멤버를 내보내지 못했어요. 다시 시도해주세요.'` (P2-6와 함께) |
+| `features/relationships/presentation/screens/group_detail_screen.dart:139` | `'정말 이 그룹에서 나가시겠어요? 마지막 멤버라면 그룹이 삭제됩니다.'` | `'정말 이 그룹에서 나갈까요? 마지막 멤버가 나가면 그룹도 사라져요.'` |
+| `features/relationships/presentation/screens/group_detail_screen.dart:152` | `'탈퇴 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'그룹에서 나가지 못했어요. 다시 시도해주세요.'` |
+| `features/relationships/presentation/screens/group_list_screen.dart:94` | `'아직 속한 관계 그룹이 없습니다.\n오른쪽 아래 + 버튼으로 그룹을 만들거나,\n메일 아이콘으로 초대 코드를 입력해보세요.'` | `'아직 속한 관계 그룹이 없어요.\n오른쪽 아래 + 버튼으로 그룹을 만들거나,\n메일 아이콘으로 초대 코드를 입력해보세요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:55` | `'초대 정보를 불러오지 못했습니다. 다시 시도해주세요.'` | `'초대 정보를 불러오지 못했어요. 다시 시도해주세요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:79` | `'초대 수락 중 문제가 발생했습니다. 다시 시도해주세요.'` | `'초대를 수락하지 못했어요. 다시 시도해주세요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:87` | `'이미 이 그룹의 멤버입니다.'` | `'이미 이 그룹의 멤버예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:90` | `'만료된 초대입니다.'` | `'만료된 초대예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:93` | `'이미 처리되었거나 취소된 초대입니다.'` | `'이미 처리됐거나 취소된 초대예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:96` | `'존재하지 않는 초대 코드입니다.'` | `'존재하지 않는 초대 코드예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:104` | `'이미 수락된 초대입니다.'` | `'이미 수락된 초대예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:106` | `'취소된 초대입니다.'` | `'취소된 초대예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:108` | `'만료된 초대입니다.'` | `'만료된 초대예요.'` |
+| `features/relationships/presentation/screens/invitation_accept_screen.dart:111` | `'만료된 초대입니다.'` | `'만료된 초대예요.'` |
+
+> **P0-7로 이관**: `'불러오지 못했습니다: ${snapshot.error}'` 3곳
+> (`share_settings_screen.dart:244`, `group_list_screen.dart:81`,
+> `group_detail_screen.dart:201`)과 `group_detail_screen.dart`의
+> `_showSnackBar(e.message)` 3곳(`:65`, `:128`, `:149`)은 서버·인프라 원문
+> 예외 노출 문제라 위 P0 섹션의 **P0-7**(총 6곳)로 분리됐다. Diana가 커밋B
+> 하나로 처리하며, 읽기 경로 확정 문구
+> (`'불러오지 못했어요. 잠시 후 다시 시도해주세요.'`)로 톤까지 함께
+> 정리되므로 이 표에는 넣지 않는다.
+>
+> 단, 위 P2-1 표의 `group_detail_screen.dart:130`(`'멤버를 내보내지 못했어요…'`),
+> `:152`(`'그룹에서 나가지 못했어요…'`), `:67`(`'초대 코드를 만들지 못했어요…'`)
+> 는 P0-7 쓰기 경로 헬퍼의 `fallback:` 인자 문구와 **글자까지 같아야** 하므로,
+> Diana는 두 곳을 같은 값으로 맞춘다(어느 커밋에서 손대든 최종 문자열 동일).
+
+> **`relationship_repository.dart:106`**: `RelationshipException` 메시지가
+> 화면까지 그대로 노출되는 경로인지 Diana가 확인하고, 화면 쪽
+> (`invitation_accept_screen.dart`)에서 이미 코드 매핑으로 덮인다면 repo
+> 문자열은 손대지 않아도 된다. 노출 경로가 있으면 위 표대로 교체.
+
+### P2-5. "정밀" 표기 통일 — 확정
+
+- 2026-08-27 기준 전수 확인 결과, **현재 사용자 문구는 이미 전부 "정밀"로
+  통일되어 있다** (SegmentedButton 라벨 `'정밀'`, 권한 프라이밍 화면
+  "정밀도(정밀/대략)", 수집 스위치 subtitle의 `"정밀" 또는 "대략"`).
+  따라서 **코드 변경은 없다.**
+- `shareModeDescription('precise')`의 `'정확한 위치가 실시간으로 보여요.'`는
+  모드를 지칭하는 게 아니라 결과를 설명하는 문장이므로 **그대로 유지**한다
+  (위 "용어 원칙" 참고).
+- 확정 사항: 앞으로 **기획 문서·QA 테스트 케이스명·디자인 문서·PR 설명**에서
+  이 모드를 부를 때는 예외 없이 **"정밀"**로 쓴다. "정확 모드", "정확도
+  모드" 같은 표기를 새로 만들지 않는다. Tom은 위치 관련 테스트 케이스명에
+  "정확" 대신 "정밀"을 쓴다(현재 `peer_location_test.dart`의 "정확히
+  임계값…"은 부사라 대상 아님).
+
+### P1-4. 권한 거부 상태 재시도 안내 강화 — 확정
+
+**파일**: `app/lib/features/location/permission/location_permission_screen.dart`
+
+목표: (a) denied 배너 문구와 바로 아래 버튼을 **말로 연결**하고, (b) "나중에
+하기"를 눌렀을 때의 결과와 되돌리는 법을 알려준다. 권한 요청 범위
+(`requestWhileInUse()`)는 그대로 — 카피만 강화한다.
+
+**① denied 배너 (`:100-104` 블록의 message)**
+
+```
+현재: message: '위치 권한이 거부되었어요. 다시 시도해주세요.',
+확정: message: '위치 권한이 거부됐어요. 아래 "위치 권한 다시 요청" 버튼으로 한 번 더 요청할 수 있어요.',
+```
+
+**② 권한 요청 버튼 라벨 (`:107-111`)** — denied 상태에서는 "다시 요청"으로 바뀌어 배너와 연결된다
+
+```
+현재:
+  label: Text(_isRequesting ? '요청 중...' : '위치 권한 허용'),
+
+확정:
+  label: Text(
+    _isRequesting
+        ? '요청 중…'
+        : (_lastResult == LocationPermissionResult.denied
+            ? '위치 권한 다시 요청'
+            : '위치 권한 허용'),
+  ),
+```
+
+**③ "나중에 하기" 아래 결과 안내 캡션 추가 (`:113-116` TextButton 바로 다음)**
+
+```
+확정 (TextButton 다음에 추가):
+  const SizedBox(height: 4),
+  Text(
+    '지금 건너뛰면 위치 공유 기능을 쓸 수 없어요. '
+    '나중에 홈 화면의 "위치 공유 설정"에서 언제든 다시 켤 수 있어요.',
+    textAlign: TextAlign.center,
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+  ),
+```
+
+**④ permanentlyDenied 배너 (`:88-93` 블록의 message)** — "설정 앱 열기" 버튼과 경로를 구체적으로 연결
+
+```
+현재: message: '위치 권한이 거부되어 있어요. 설정 앱에서 권한을 허용해주세요.',
+확정: message: '위치 권한이 꺼져 있어요. 아래 "설정 앱 열기"를 눌러 권한 > 위치를 허용해주세요.',
+```
+
+**⑤ serviceDisabled 배너 (`:77-81` 블록의 message)** — 소폭 명확화(선택 반영)
+
+```
+현재: message: '기기의 위치 서비스가 꺼져 있어요. 설정에서 켜주세요.',
+확정: message: '기기의 위치 서비스가 꺼져 있어요. 아래 "위치 서비스 설정 열기"에서 위치를 켜주세요.',
+```
+
+이 다섯 배너/라벨 문구는 서로 "아래 OO 버튼" 형태로 바로 밑 버튼 라벨을
+그대로 인용하도록 맞춰 놨다 — 버튼 라벨을 바꾸면 배너 문구의 인용도 같이
+맞춰야 한다.
+
+### P2-6. "추방" → "내보내기" 어휘 순화 — 확정 (이번 커밋 포함, Plexa 승인 2026-08-27)
+
+**파일**: `app/lib/features/relationships/presentation/screens/group_detail_screen.dart`
+
+"추방"은 커플·가족·친구 대상 앱 톤에 거칠다. 문자열 하나짜리 변경이고
+이 파일은 이번 라운드에 이미 열려 있으므로 이번 커밋에 포함한다. 확인 문구
+(`:115` `'${member.nickname}님을 그룹에서 내보낼까요?'`)는 이미 "내보내기"
+어휘라 그대로 두고, 아래 3곳만 바꾼다.
+
+```
+group_detail_screen.dart:114
+  현재: title: '멤버 추방',
+  확정: title: '멤버 내보내기',
+
+group_detail_screen.dart:116
+  현재: confirmLabel: '추방',
+  확정: confirmLabel: '내보내기',
+
+group_detail_screen.dart:270
+  현재: tooltip: '추방',
+  확정: tooltip: '내보내기',
+```
+
+`:130` 스낵바 폴백 문구(`'멤버 추방 중 문제가 발생했습니다…'` → `'멤버를
+내보내지 못했어요. 다시 시도해주세요.'`)는 P2-1 표에도, P0-7 쓰기 경로
+`fallback:` 인자에도 등장한다 — 세 곳의 최종 문자열을 동일하게 맞춘다.
+
+> **참고**: `_removeMember`의 `on PostgrestException` 원문 노출은 처음에
+> 이 한 곳(`:128`)만 발견했으나, Plexa가 전수 grep으로 같은 파일 `:65`
+> (`_createInvitation`)·`:149`(`_leaveGroup`)까지 3곳임을 확인해 **P0-7
+> 쓰기 경로**로 편입했다(위 P0-7 참고). `group_list_screen.dart`에는 같은
+> 패턴 없음.
+
+### Diana 적용 순서 제안
+
+1. **P1-7** (4곳) + **P2-5** (변경 없음, 확인만) — 위치 설정 화면 한 파일 위주.
+2. **P1-4** (권한 화면 한 파일 — 배너 3개 + 버튼 라벨 1 + "나중에 하기" 캡션 1).
+3. **P2-1** 표 + **P2-6** (3곳) — 파일별로 위→아래 치환. 카피·톤 커밋(커밋A)
+   하나로 묶어도 됨.
+4. **P0-7** (읽기 경로 3곳 + 쓰기 경로 3곳 = 6곳) — **별도 커밋B**로 분리
+   (위 P0-7 참고). 포함: 공용 모듈 `server_error_message.dart` 신설, 도메인
+   데이터 2개(`shareSettingsServerErrors` / `relationshipGroupServerErrors`),
+   기존 `_mapShareErrorMessage`(P0-5)를 공용 함수 호출로 이관, 쓰기 3곳 +
+   읽기 3곳 교체. 커밋A와 `group_detail_screen.dart`의 폴백 문자열이 겹치므로,
+   두 커밋 중 나중 것에서 최종 문자열이 표와 일치하는지 확인.
+
+적용 후 최종 확인:
+- `grep -rn "습니다\|합니다\|됩니다\|수집\|전송\|추방" app/lib`로 사용자 문구에
+  합쇼체·내부용어가 남지 않았는지 스캔(개발자 로그·Exception 메시지 제외).
+- `grep -rn "_showSnackBar(e.message)\|\${snapshot.error}" app/lib`로 P0-7
+  6곳이 모두 없어졌는지 확인.
