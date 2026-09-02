@@ -1126,3 +1126,91 @@ group_detail_screen.dart:270
   합쇼체·내부용어가 남지 않았는지 스캔(개발자 로그·Exception 메시지 제외).
 - `grep -rn "_showSnackBar(e.message)\|\${snapshot.error}" app/lib`로 P0-7
   6곳이 모두 없어졌는지 확인.
+
+---
+
+## P0-8 카피 확정 — auth 화이트리스트 + 폴백 (Din, 2026-09-02)
+
+P0-8 티켓(위 576행~) 중 **#1 `login_screen.dart` / #2 `signup_screen.dart`의
+`on AuthException catch (e)` 경로**에 붙일 사용자 문구를 확정한다. #3
+(`group_create_screen.dart`) / #4(초대 미리보기)는 `PostgrestException`이라
+`get_invitation_preview` / `create_relationship_group`의 `raise exception`
+원문을 SQL에서 뽑아 만드는 별도 도메인 화이트리스트가 필요하다 — 이 섹션
+범위 밖이고, 그 표는 착수 시 P0-5·P0-7과 같은 방식으로 따로 확정한다.
+
+### 원칙
+
+- 톤은 189ae2c에서 통일한 **해요체** 기준을 그대로 유지한다. 스낵바/인라인
+  에러는 완결된 안내 문장이므로 마침표를 유지한다.
+- **로그인 실패는 계정 존재 여부 오라클이 되지 않게 한다.** "이메일이 등록
+  안 됨"과 "비밀번호 틀림"을 절대 구분해서 알려주지 않는다. GoTrue의
+  `invalid_credentials`(= `Invalid login credentials`)는 두 경우를 모두
+  뭉뚱그린 하나의 코드이고, 우리 문구도 항상 하나 —
+  `'이메일 또는 비밀번호가 올바르지 않아요.'` 로만 노출한다.
+- 매칭에 실패한 메시지는 **무조건 폴백으로 덮는다.** 서버·GoTrue 원문(영어
+  메시지, 에러 코드 문자열)이 화면에 그대로 노출되는 경로를 `mapServerErrorMessage`
+  한 군데로 모은다는 P0-4/P0-5/P0-7 계약을 그대로 잇는다.
+
+### 매칭 방식 (Diana 참고)
+
+`AuthException.message` 텍스트는 GoTrue 버전에 따라 문구가 바뀌므로 안정
+계약이 아니다. `supabase_flutter ^2.8.0`부터 `AuthApiException.code`
+(스네이크케이스 안정 식별자, 예: `invalid_credentials`)가 있으므로:
+
+1. `_friendlyAcceptError`를 흡수하면서 `mapServerErrorMessage` 시그니처를
+   P0-7 참고 노트대로 **원문 `String`을 받도록** 넓힌다(현재는
+   `PostgrestException`만 받음). auth 호출부에서는
+   `'${e.code ?? ''} ${e.message}'` 를 넘긴다 — 아래 표의 키를 코드형·문구형
+   둘 다 등록해 두었으므로 어느 쪽이 들어와도 소문자 `contains`로 매칭된다.
+2. **네트워크 예외(`AuthRetryableFetchException`, GoTrue 5xx/타임아웃)**는
+   `mapServerErrorMessage`에 태우기 전에 `if (e is AuthRetryableFetchException)`
+   로 먼저 분기한다(메시지가 `Failed host lookup` 등 플랫폼 원문이라 표로
+   못 잡는다).
+
+### authServerErrors — 삽입 순서 = 검사 순서 (구체적인 것 먼저)
+
+| 매칭 키 (소문자 부분일치, 나열된 것 중 아무거나) | 확정 카피 | 화면 |
+|---|---|---|
+| `email not confirmed` · `email_not_confirmed` | `아직 메일 인증이 안 끝났어요. 가입할 때 보내드린 메일에서 인증 링크를 눌러주세요.` | login |
+| `invalid login credentials` · `invalid_credentials` | `이메일 또는 비밀번호가 올바르지 않아요.` | login |
+| `user_banned` · `user is banned` | `로그인할 수 없는 계정이에요. 도움이 필요하면 문의해주세요.` | login |
+| `already registered` · `been registered` · `user_already_exists` · `email_exists` | `이미 가입된 이메일이에요. 로그인해주세요.` | signup |
+| `weak_password` · `weak password` · `password is known to be weak` | `비밀번호가 너무 단순해요. 다른 비밀번호로 다시 시도해주세요.` | signup |
+| `password should be at least` · `password should contain` | `비밀번호가 조건에 맞지 않아요. 6자 이상으로 다시 입력해주세요.` | signup |
+| `email_address_invalid` · `unable to validate email address` · `invalid format` | `이메일 주소 형식을 다시 확인해주세요.` | signup |
+| `signup_disabled` · `signups not allowed` | `지금은 새로 가입할 수 없어요. 잠시 후 다시 시도해주세요.` | signup |
+| `over_email_send_rate_limit` · `email rate limit exceeded` | `인증 메일을 너무 자주 보냈어요. 잠시 후 다시 시도해주세요.` | signup |
+| `over_request_rate_limit` · `request this after` · `too many requests` | `요청이 많아요. 잠시 후 다시 시도해주세요.` | 공통 |
+| `captcha_failed` · `captcha protection` | `확인에 실패했어요. 잠시 후 다시 시도해주세요.` | 공통 |
+
+- `validation_failed`(요청 형식 거절)는 사용자 행동으로 특정이 안 되는
+  잡동사니라 **표에 넣지 않고 폴백이 처리하게 둔다.** 클라이언트 검증(이메일
+  `@`, 비밀번호 6자)을 이미 통과한 뒤 이 코드가 오면 대개 이메일 형식
+  문제지만, 확실하지 않으므로 폴백으로 덮는 편이 안전하다.
+- 표에 있으나 실제로 도달하지 않는 항목이 있어도 둔다(비용 없음). 반대로
+  **Diana의 전수 확인에서 이 표에 없는 메시지가 나오면 폴백으로 덮이더라도
+  그대로 두지 말고 Din에게 문구를 요청한다.**
+
+### 폴백 (매칭 실패 시 — `mapServerErrorMessage`의 `fallback:` 인자)
+
+189ae2c에서 각 화면의 비-Auth `catch (e)` 폴백으로 이미 확정된 문구를 **글자
+까지 그대로** 재사용한다. P0-7이 쓰기 경로에서 한 것과 같은 원칙 — 예외
+타입이 Auth든 아니든 사용자가 보는 문구가 같아야 한다.
+
+- `login_screen.dart` — `'로그인 중 문제가 생겼어요. 다시 시도해주세요.'`
+- `signup_screen.dart` — `'회원가입 중 문제가 생겼어요. 다시 시도해주세요.'`
+
+### 네트워크 예외 (`AuthRetryableFetchException`) — 표 밖 분기
+
+- `'연결 상태가 좋지 않아요. 인터넷 연결을 확인하고 다시 시도해주세요.'`
+
+### 오라클 관련 메모 (Plexa·Dexa 확인 요청)
+
+`email_not_confirmed` 문구는 "이 이메일은 가입돼 있으나 미인증"임을 드러내므로
+엄밀히는 계정 열거 단서다. 그럼에도 구분해서 노출하는 쪽으로 확정한 이유:
+(a) GoTrue가 이 코드를 이미 별도로 던지므로 우리 문구를 뭉뚱그려도 서버 응답
+수준에서 이미 열거가 가능하고, (b) 정당한 사용자가 "로그인이 왜 안 되지"를
+스스로 풀려면 이 안내가 반드시 필요하다. 열거 방어를 강화해야 하는 시점이
+오면 문구가 아니라 Supabase Auth의 "Confirm email" + 열거 보호 설정(Dexa
+영역)으로 서버 레벨에서 막는 게 맞다. **`invalid_credentials`를 절대 구분하지
+않는 것은 이와 무관하게 확정이다.**
