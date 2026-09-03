@@ -26,7 +26,10 @@ supabase/
     20260823100001_fix_invitation_email_check.sql # invited_email 검증 누락 버그 수정
     20260823100002_fix_location_spoofing_and_scope_bypass.sql # 위치 스푸핑/그룹 접근범위 우회 차단
     20260823100003_fix_location_ping_input_validation.sql # accuracy_m/battery_level 입력 검증 누락 수정
+    20260903090001_schedule_location_history_retention.sql # location_history 보존기간 정리 pg_cron 잡 등록
 ```
+
+운영(호스티드) 배포 절차는 `supabase/DEPLOYMENT.md` 참고.
 
 로컬 개발 시 (Docker 필요):
 
@@ -190,7 +193,9 @@ Phase 0+1 마이그레이션 전체를 순서대로 적용하고 검증했다. �
 - 사진/미디어 저장(Storage 버킷 + RLS), 버킷리스트 데이터 모델, 실시간 동시
   편집 동기화.
 - 지오펜스/도착 알림 등 위치 기반 확장 기능(이번 라운드 범위 밖).
-- `location_history` 보존기간 정리 함수(`delete_expired_location_history()`)의
-  실제 스케줄 등록(pg_cron 또는 외부 스케줄러).
+- ~~`location_history` 보존기간 정리 함수의 실제 스케줄 등록~~ →
+  `20260903090001`에서 pg_cron 잡으로 등록(운영 배포 시 대시보드에서 pg_cron
+  활성화 필요, `supabase/DEPLOYMENT.md` 3장 참고). pg_cron 불가 환경이면 예약
+  Edge Function 폴백.
 - Realtime Broadcast가 실제 Supabase 로컬 스택(Docker)에서 의도대로 동작하는지
   재검증.
