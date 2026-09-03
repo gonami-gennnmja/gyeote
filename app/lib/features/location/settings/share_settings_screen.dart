@@ -111,7 +111,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: shareSettingsServerErrors,
         fallback: '공유 설정을 바꾸지 못했어요. 다시 시도해주세요.',
       ));
@@ -138,7 +138,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: shareSettingsServerErrors,
         fallback: '일시중지하지 못했어요. 다시 시도해주세요.',
       ));
@@ -163,7 +163,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: shareSettingsServerErrors,
         fallback: '공유를 다시 시작하지 못했어요. 다시 시도해주세요.',
       ));

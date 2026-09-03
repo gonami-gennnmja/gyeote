@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/server_error_message.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../data/models/invitation_preview.dart';
 import '../../data/relationship_repository.dart';
+import '../../data/server_error_messages.dart';
 import '../widgets/relationship_type_x.dart';
 import 'group_detail_screen.dart';
 
@@ -48,8 +50,18 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
       final preview = await _repository.getInvitationPreview(code);
       setState(() => _preview = preview);
     } on PostgrestException catch (e) {
-      setState(() => _errorMessage = e.message);
+      // get_invitation_preview는 순수 SELECT라 raise exception이 없다 —
+      // 여기 오는 PostgrestException은 전부 인프라 계층(토큰/네트워크/RPC)이라
+      // 화이트리스트에 걸릴 게 없고 폴백으로 덮인다. 미리보기와 수락이 같은
+      // 함수를 타도록 수락 경로와 동일하게 mapServerErrorMessage를 쓴다.
+      setState(() => _errorMessage = mapServerErrorMessage(
+            e.message,
+            whitelist: invitationServerErrors,
+            fallback: '초대 정보를 불러오지 못했어요. 다시 시도해주세요.',
+          ));
     } on RelationshipException catch (e) {
+      // 결과 0행("존재하지 않는 초대 코드예요.")을 repository가 우리 한글 문구로
+      // 던진다 — 서버 원문이 아니므로 그대로 노출한다(P0-8 대상 아님).
       setState(() => _errorMessage = e.message);
     } catch (e) {
       setState(() => _errorMessage = '초대 정보를 불러오지 못했어요. 다시 시도해주세요.');
@@ -74,28 +86,16 @@ class _InvitationAcceptScreenState extends State<InvitationAcceptScreen> {
         MaterialPageRoute(builder: (_) => GroupDetailScreen(groupId: groupId)),
       );
     } on PostgrestException catch (e) {
-      setState(() => _errorMessage = _friendlyAcceptError(e.message));
+      setState(() => _errorMessage = mapServerErrorMessage(
+            e.message,
+            whitelist: invitationServerErrors,
+            fallback: '초대를 수락하지 못했어요. 다시 시도해주세요.',
+          ));
     } catch (e) {
       setState(() => _errorMessage = '초대를 수락하지 못했어요. 다시 시도해주세요.');
     } finally {
       if (mounted) setState(() => _isAccepting = false);
     }
-  }
-
-  String _friendlyAcceptError(String rawMessage) {
-    if (rawMessage.contains('already a member')) {
-      return '이미 이 그룹의 멤버예요.';
-    }
-    if (rawMessage.contains('expired')) {
-      return '만료된 초대예요.';
-    }
-    if (rawMessage.contains('not pending')) {
-      return '이미 처리됐거나 취소된 초대예요.';
-    }
-    if (rawMessage.contains('not found')) {
-      return '존재하지 않는 초대 코드예요.';
-    }
-    return rawMessage;
   }
 
   String _previewStatusMessage(InvitationPreview preview) {

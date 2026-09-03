@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/server_error_message.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../data/relationship_repository.dart';
+import '../../data/server_error_messages.dart';
 import '../widgets/relationship_type_x.dart';
 import 'group_detail_screen.dart';
 
@@ -49,7 +51,11 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
         ),
       );
     } on PostgrestException catch (e) {
-      setState(() => _errorMessage = e.message);
+      setState(() => _errorMessage = mapServerErrorMessage(
+            e.message,
+            whitelist: groupCreateServerErrors,
+            fallback: '그룹을 만들지 못했어요. 다시 시도해주세요.',
+          ));
     } catch (e) {
       setState(() => _errorMessage = '그룹을 만들지 못했어요. 다시 시도해주세요.');
     } finally {

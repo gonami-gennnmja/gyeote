@@ -148,8 +148,10 @@ class RelationshipRepository {
 }
 
 /// repository 계층에서 사용하는 도메인 예외 (예: 미리보기 결과 없음).
-/// RPC 자체 에러는 `PostgrestException`이 그대로 전파되며, 화면단에서
-/// `e.message`를 사용자에게 보여준다.
+/// message는 앱이 직접 쓴 한글 문구라 화면에 그대로 노출해도 된다.
+/// RPC 자체 에러(`PostgrestException`)는 그대로 전파되며, 화면단에서
+/// `mapServerErrorMessage`로 화이트리스트 매핑 후 실패 시 폴백으로 덮는다
+/// (서버 원문 비노출 — Din UX 리뷰 P0-8).
 class RelationshipException implements Exception {
   const RelationshipException(this.message);
 

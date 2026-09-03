@@ -67,7 +67,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       await _showInviteCodeDialog(invitation.inviteCode);
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: relationshipGroupServerErrors,
         fallback: '초대 코드를 만들지 못했어요. 다시 시도해주세요.',
       ));
@@ -134,7 +134,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       _reload();
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: relationshipGroupServerErrors,
         fallback: '멤버를 내보내지 못했어요. 다시 시도해주세요.',
       ));
@@ -159,7 +159,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       if (mounted) Navigator.of(context).pop();
     } on PostgrestException catch (e) {
       _showSnackBar(mapServerErrorMessage(
-        e,
+        e.message,
         whitelist: relationshipGroupServerErrors,
         fallback: '그룹에서 나가지 못했어요. 다시 시도해주세요.',
       ));

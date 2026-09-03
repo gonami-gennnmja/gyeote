@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/server_error_message.dart';
 import '../../../../core/routing/app_router.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../data/auth_repository.dart';
+import '../../data/server_error_messages.dart';
 
 /// 이메일/비밀번호 로그인 화면.
 ///
@@ -46,8 +48,14 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
       // 성공 시 별도 네비게이션 불필요 (AuthGate가 자동 전환).
+    } on AuthRetryableFetchException {
+      setState(() => _errorMessage = authNetworkError);
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      setState(() => _errorMessage = mapServerErrorMessage(
+            '${e.code ?? ''} ${e.message}',
+            whitelist: authServerErrors,
+            fallback: '로그인 중 문제가 생겼어요. 다시 시도해주세요.',
+          ));
     } catch (e) {
       setState(() => _errorMessage = '로그인 중 문제가 생겼어요. 다시 시도해주세요.');
     } finally {

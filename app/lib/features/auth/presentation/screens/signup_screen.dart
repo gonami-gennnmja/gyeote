@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../../core/errors/server_error_message.dart';
 import '../../../../core/widgets/primary_button.dart';
 import '../../data/auth_repository.dart';
+import '../../data/server_error_messages.dart';
 
 /// 이메일/비밀번호 회원가입 화면.
 ///
@@ -63,8 +65,14 @@ class _SignupScreenState extends State<SignupScreen> {
         Navigator.of(context).pop();
       }
       // session이 바로 발급된 경우, AuthGate가 자동으로 홈 화면으로 전환한다.
+    } on AuthRetryableFetchException {
+      setState(() => _errorMessage = authNetworkError);
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      setState(() => _errorMessage = mapServerErrorMessage(
+            '${e.code ?? ''} ${e.message}',
+            whitelist: authServerErrors,
+            fallback: '회원가입 중 문제가 생겼어요. 다시 시도해주세요.',
+          ));
     } catch (e) {
       setState(() => _errorMessage = '회원가입 중 문제가 생겼어요. 다시 시도해주세요.');
     } finally {
