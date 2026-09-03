@@ -21,9 +21,30 @@
 
 | 우선순위 | 개수 | 핵심 |
 |---|---|---|
-| P0 | 8건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 (P0-8은 다음 라운드 이월) |
+| P0 | 8건 | 실제 공유 상태와 화면에 보이는 상태가 어긋나거나, 서버 원문 메시지가 그대로 노출될 수 있는 항목 |
 | P1 | 7건 | 이해도/진입 흐름을 개선하는 항목 |
 | P2 | 6건 | 톤/디테일 다듬기 |
+
+---
+
+## v0.1 / v0.2 범위 구분 (가인님 지시, 2026-09-03 — "최속 릴리즈")
+
+v0.1은 **위치 공유 + 관계 그룹 + 초대**만 담아 최대한 빨리 출시한다. 사진첩·
+버킷리스트·스토리는 v0.2 이후.
+
+| 항목 | 범위 | 메모 |
+|---|---|---|
+| P0-1 ~ P0-8 | **v0.1** | 프라이버시·오해 리스크라 출시 전 필수 |
+| P1-1, P1-2, P1-3, P1-4, P1-6, P1-7 | **v0.1** | 이해도 관련, 대부분 카피/작은 위젯 |
+| **P1-5** (그룹 상세 → 공유 설정 바로가기) | **v0.2** | 동선 개선, 없어도 출시 가능 |
+| **P2-1, P2-5, P2-6** | **v0.1** | 이미 카피·톤 커밋에 반영됨 |
+| **P2-2** (지도 스피너 겹침) | **v0.2** | |
+| **P2-3** (내 위치로 이동 버튼) | **v0.2** | |
+| **P2-4** (지도 pull-to-refresh) | **v0.2** | |
+| 런처 아이콘 · 스토어 등재 자산 · 개인정보처리방침 | **v0.1 (신규, 최우선)** | Android 빌드를 실제로 깨는 항목 포함 → `v0.1-release-assets.md` 참조 |
+
+릴리즈 자산(아이콘 규격·스토어 문구·스크린샷 구성·개인정보처리방침 초안)은
+분량이 커서 별도 문서로 뺐다: **`docs/design/v0.1-release-assets.md`**.
 
 ---
 
@@ -573,7 +594,7 @@ P0-7의 목적(원문 노출 경로를 한 군데로 모으기)과 같은 커밋
 
 ---
 
-### P0-8. 인증·회원가입·그룹 생성·초대 미리보기 경로의 서버 원문 노출 4곳 (Rena 재리뷰 ba77b1b 지적 → Din 전수 확인, 2026-08-28 / **다음 라운드, 이번 라운드 착수 안 함**)
+### P0-8. 인증·회원가입·그룹 생성·초대 미리보기 경로의 서버 원문 노출 4곳 (Rena 재리뷰 ba77b1b 지적 → Din 전수 확인, 2026-08-28 / **v0.1 포함 — 카피 확정·Dexa 전수 조사 완료 2026-09-02, Diana 구현 중**)
 
 P0-7과 **정확히 같은 부류**(서버·인프라 원문 예외가 화면 문자열로 직행)인데
 P0-7 스코프(위치 공유 설정 + 관계 그룹 CRUD) 밖에 남아 있는 경로다. Rena는
@@ -616,15 +637,14 @@ supabase_flutter가 던지는 메시지를 전수 확인해 확정)을 만들고
 노트대로 `mapServerErrorMessage`가 원문 `String`을 받게 돼 있으면 그대로
 재사용한다.
 
-**착수 시 해야 할 전수 조사**: `get_invitation_preview` /
-`create_relationship_group` / `accept_relationship_invitation`의
-`raise exception` 메시지를 `090006_relationship_functions.sql` +
-`100001_fix_invitation_email_check.sql`에서 전부 뽑아 초대/그룹생성 도메인
-화이트리스트를 확정한다(P0-5·P0-7과 같은 방식). 알려진 것만 미리 적어두면:
-`accept_relationship_invitation` → `invitation not found` /
-`invitation is not pending (status: %)` / `invitation has expired` /
-`already a member of this group` / `invitation is scoped to a different email address` /
-`authentication required`.
+**전수 조사 완료 (Dexa, 2026-09-02) → 아래 "P0-8 카피 확정" 섹션 B에서 확정.**
+`get_invitation_preview`는 `language sql` 순수 SELECT로 `raise exception`이
+**0건**(초대/그룹생성 도메인 표 불필요, 폴백만). `create_relationship_group`은
+`authentication required` **1건**. `accept_relationship_invitation`(현재 유효
+정의 = `100001_fix_invitation_email_check.sql`)은 **6건**(`authentication required`
+/ `invitation not found` / `invitation is not pending (status: %)` — `%` 보간이라
+부분일치 키 / `invitation has expired` / `invitation is scoped to a different
+email address` / `already a member of this group`). 확정 문구는 B 섹션 표 참조.
 
 **제외 (누출 아님)**: `invitation_accept_screen.dart:52-53`의
 `on RelationshipException catch (e) { setState(() => _errorMessage = e.message); }`
@@ -633,9 +653,9 @@ supabase_flutter가 던지는 메시지를 전수 확인해 확정)을 만들고
 문구(P2-1 반영 후 `'존재하지 않는 초대 코드예요.'`)다. 그대로 화면에 띄워도
 문제없다 — P0-8 대상에서 뺀다.
 
-**범위 재확인**: P0-8은 위 4곳 + `_friendlyAcceptError` 흡수까지다. 이번
-라운드(ba77b1b 기준 카피·톤 커밋 + P0-7 커밋B)에는 **착수하지 않는다** —
-다음 라운드 티켓으로만 남긴다.
+**범위 재확인**: P0-8은 위 4곳 + `_friendlyAcceptError` 흡수까지다. 가인님의
+v0.1 최속 릴리즈 지시로 **v0.1에 포함**됐다(2026-09-03). 카피는 아래 "P0-8
+카피 확정" 섹션에서 확정, Diana 구현 중.
 
 ---
 
@@ -702,7 +722,7 @@ Text('${setting.pausedUntil!.toLocal()} 까지 일시중지됨')
 - denied 배너 문구를 `"위치 권한이 거부되었어요. 아래 버튼으로 다시 요청할 수 있어요."` 로 바꿔 버튼과 연결
 - "나중에 하기" 버튼 근처에 보조 캡션 추가: `"나중에 '위치 공유 설정'에서 언제든 다시 켤 수 있어요."`
 
-### P1-5. 그룹 상세 화면에서 해당 그룹의 공유 설정으로 바로 가는 진입점이 없다
+### P1-5. 그룹 상세 화면에서 해당 그룹의 공유 설정으로 바로 가는 진입점이 없다  `[v0.2]`
 
 **파일**: `group_detail_screen.dart`
 
@@ -775,7 +795,7 @@ subtitle: "이 스위치를 켜야 아래에서 선택한 그룹에 위치가 �
 - "...서버에 전송합니다" → "...서버로 전달해요"
 - "그룹 상세" (AppBar 타이틀류는 명사형이라 예외, 톤 통일 대상 아님)
 
-### P2-2. 지도 로딩 스피너가 매 refresh마다 지도 위 상단에 겹쳐 뜬다
+### P2-2. 지도 로딩 스피너가 매 refresh마다 지도 위 상단에 겹쳐 뜬다  `[v0.2]`
 
 **파일**: `location_map_screen.dart:255-261`
 
@@ -787,7 +807,7 @@ subtitle: "이 스위치를 켜야 아래에서 선택한 그룹에 위치가 �
 전체 화면형 로딩을 쓰고, 이미 데이터가 있는 상태의 백그라운드 refresh는
 AppBar의 새로고침 아이콘을 잠깐 스피너로 바꾸는 정도의 미세한 표시로 낮춘다.
 
-### P2-3. 지도에서 "내 위치로 이동" 동선이 없다
+### P2-3. 지도에서 "내 위치로 이동" 동선이 없다  `[v0.2]`
 
 **파일**: `location_map_screen.dart`
 
@@ -795,7 +815,7 @@ AppBar의 새로고침 아이콘을 잠깐 스피너로 바꾸는 정도의 미�
 보고 내 위치 기준을 잡을 수 없어 지도 탐색이 불편할 수 있다. (이번 라운드
 범위 밖일 수 있어 P2로 분류 — 필요시 Phase 2로 이연 가능.)
 
-### P2-4. 지도 화면에 pull-to-refresh가 없다
+### P2-4. 지도 화면에 pull-to-refresh가 없다  `[v0.2]`
 
 설정 화면(`share_settings_screen.dart`)은 `RefreshIndicator`를 쓰는데 지도
 화면은 AppBar 아이콘으로만 새로고침한다. 두 화면의 새로고침 상호작용 방식을
@@ -1129,14 +1149,18 @@ group_detail_screen.dart:270
 
 ---
 
-## P0-8 카피 확정 — auth 화이트리스트 + 폴백 (Din, 2026-09-02)
+## P0-8 카피 확정 — auth + 초대/그룹생성 화이트리스트 + 폴백 (Din, 2026-09-02)
 
-P0-8 티켓(위 576행~) 중 **#1 `login_screen.dart` / #2 `signup_screen.dart`의
-`on AuthException catch (e)` 경로**에 붙일 사용자 문구를 확정한다. #3
-(`group_create_screen.dart`) / #4(초대 미리보기)는 `PostgrestException`이라
-`get_invitation_preview` / `create_relationship_group`의 `raise exception`
-원문을 SQL에서 뽑아 만드는 별도 도메인 화이트리스트가 필요하다 — 이 섹션
-범위 밖이고, 그 표는 착수 시 P0-5·P0-7과 같은 방식으로 따로 확정한다.
+P0-8 티켓(위 576행~)의 4개 경로 + `_friendlyAcceptError` 흡수에 필요한 사용자
+문구를 **전부 확정한다.** 아래 세 블록으로 나뉜다.
+
+- **A. auth 화이트리스트** — #1 `login_screen.dart` / #2 `signup_screen.dart`의
+  `on AuthException catch (e)` 경로. (2026-09-02 확정, Plexa 승인)
+- **B. 초대/그룹생성 화이트리스트** — #3 `group_create_screen.dart`,
+  #4 `invitation_accept_screen.dart`(미리보기 `:51` + 수락 `:77`).
+  `PostgrestException`이라 서버 RPC의 `raise exception` 원문 기준. Dexa가
+  마이그레이션 전수 조사를 끝냈고(2026-09-02), 그 결과로 아래 표를 **확정**해
+  닫는다 — "착수 시 확정"으로 열어두지 않는다.
 
 ### 원칙
 
@@ -1167,11 +1191,11 @@ P0-8 티켓(위 576행~) 중 **#1 `login_screen.dart` / #2 `signup_screen.dart`�
    로 먼저 분기한다(메시지가 `Failed host lookup` 등 플랫폼 원문이라 표로
    못 잡는다).
 
-### authServerErrors — 삽입 순서 = 검사 순서 (구체적인 것 먼저)
+### A. authServerErrors — 삽입 순서 = 검사 순서 (구체적인 것 먼저)
 
 | 매칭 키 (소문자 부분일치, 나열된 것 중 아무거나) | 확정 카피 | 화면 |
 |---|---|---|
-| `email not confirmed` · `email_not_confirmed` | `아직 메일 인증이 안 끝났어요. 가입할 때 보내드린 메일에서 인증 링크를 눌러주세요.` | login |
+| `email not confirmed` · `email_not_confirmed` | `아직 메일 인증이 안 끝났어요. 가입할 때 보내드린 메일에서 인증 링크를 눌러주세요.` (현재 로컬 config `enable_confirmations=false` 기준 도달 불가, 운영 설정 미확인 — 아래 메모) | login |
 | `invalid login credentials` · `invalid_credentials` | `이메일 또는 비밀번호가 올바르지 않아요.` | login |
 | `user_banned` · `user is banned` | `로그인할 수 없는 계정이에요. 도움이 필요하면 문의해주세요.` | login |
 | `already registered` · `been registered` · `user_already_exists` · `email_exists` | `이미 가입된 이메일이에요. 로그인해주세요.` | signup |
@@ -1191,7 +1215,7 @@ P0-8 티켓(위 576행~) 중 **#1 `login_screen.dart` / #2 `signup_screen.dart`�
   **Diana의 전수 확인에서 이 표에 없는 메시지가 나오면 폴백으로 덮이더라도
   그대로 두지 말고 Din에게 문구를 요청한다.**
 
-### 폴백 (매칭 실패 시 — `mapServerErrorMessage`의 `fallback:` 인자)
+**폴백 (매칭 실패 시 — `mapServerErrorMessage`의 `fallback:` 인자)**
 
 189ae2c에서 각 화면의 비-Auth `catch (e)` 폴백으로 이미 확정된 문구를 **글자
 까지 그대로** 재사용한다. P0-7이 쓰기 경로에서 한 것과 같은 원칙 — 예외
@@ -1200,17 +1224,97 @@ P0-8 티켓(위 576행~) 중 **#1 `login_screen.dart` / #2 `signup_screen.dart`�
 - `login_screen.dart` — `'로그인 중 문제가 생겼어요. 다시 시도해주세요.'`
 - `signup_screen.dart` — `'회원가입 중 문제가 생겼어요. 다시 시도해주세요.'`
 
-### 네트워크 예외 (`AuthRetryableFetchException`) — 표 밖 분기
+**네트워크 예외 (`AuthRetryableFetchException`) — 표 밖 분기**
 
 - `'연결 상태가 좋지 않아요. 인터넷 연결을 확인하고 다시 시도해주세요.'`
 
-### 오라클 관련 메모 (Plexa·Dexa 확인 요청)
+**`email_not_confirmed` 도달 가능성 메모 (Dexa 조사 + 가인님 결정, 2026-09-02)**
 
-`email_not_confirmed` 문구는 "이 이메일은 가입돼 있으나 미인증"임을 드러내므로
-엄밀히는 계정 열거 단서다. 그럼에도 구분해서 노출하는 쪽으로 확정한 이유:
-(a) GoTrue가 이 코드를 이미 별도로 던지므로 우리 문구를 뭉뚱그려도 서버 응답
-수준에서 이미 열거가 가능하고, (b) 정당한 사용자가 "로그인이 왜 안 되지"를
-스스로 풀려면 이 안내가 반드시 필요하다. 열거 방어를 강화해야 하는 시점이
-오면 문구가 아니라 Supabase Auth의 "Confirm email" + 열거 보호 설정(Dexa
-영역)으로 서버 레벨에서 막는 게 맞다. **`invalid_credentials`를 절대 구분하지
-않는 것은 이와 무관하게 확정이다.**
+> **현재 로컬 config 기준(`enable_confirmations=false`) 도달 불가, 운영 설정
+> 미확인.**
+
+Dexa 조사 결과:
+- `supabase/config.toml:226` `[auth.email] enable_confirmations = false`,
+  SMTP 블록 전부 주석(로컬 캡처 전용). 이 설정에서 GoTrue는 신규 가입을 즉시
+  autoconfirm하므로, 비밀번호 로그인 경로의 `email_not_confirmed`는 "확인
+  요구 ON + 미확인 계정"에서만 나오고 **정상 가입 흐름에서는 도달하지
+  않는다**(config 값 + 문서화된 GoTrue 동작에 근거한 추론 — GoTrue 내부 로직은
+  리포에 없어 100% 단정은 아님).
+- 계정 열거 보호 설정은 `config.toml`에 항목 자체가 없다(로컬 CLI 스키마
+  미지원). rate limit(`sign_in_sign_ups` 30회/5분)만 완화 요소.
+- `config.toml`은 `npx supabase start` 로컬 전용이다. **운영 Auth 설정(이메일
+  확인 ON/OFF, 열거 보호)은 리포로 알 수 없고 대시보드 확인 사항.**
+
+가인님 결정: **이 분기는 살려둔다.** 운영 설정을 리포로 알 수 없고 나중에
+이메일 확인을 켤 여지가 있어, 지금 지우면 그때 다시 만들어야 한다. 확인
+메일을 켜는 순간 이 문구는 "가입됐으나 미인증"을 드러내는 열거 단서가 되므로,
+그 시점에는 문구를 뭉뚱그리는 게 아니라 Supabase Auth 대시보드의 확인 메일 +
+열거 보호(leaked-enumeration protection)로 서버 레벨에서 막는다.
+
+**`invalid_credentials`를 절대 구분하지 않는 것**(이메일 없음 vs 비밀번호
+틀림)은 위 config 상태와 무관하게 확정이다.
+
+---
+
+### B. 초대/그룹생성 화이트리스트 — Dexa 마이그레이션 전수 조사 결과로 확정
+
+Dexa가 `20260820090006_relationship_functions.sql` +
+`20260823100001_fix_invitation_email_check.sql`(현재 유효한
+`accept_relationship_invitation` 정의)를 전수 조사한 결과:
+
+**#4 초대 미리보기 (`invitation_accept_screen.dart:51`, `getInvitationPreview`)
+— 도메인 표 불필요, 폴백만.**
+`get_invitation_preview`는 `language sql` 순수 SELECT로 **`raise exception`이
+0건**이다. 유효하지 않은 초대 코드도 예외 없이 0행을 돌려준다(0행 처리는
+이미 `RelationshipException` 한글 문구 경로 — P0-8 제외 대상). 즉 이 경로의
+`PostgrestException`은 P0-7 읽기 경로와 똑같이 **인프라 레벨 원문뿐**이라
+화이트리스트로 거를 게 없다.
+
+- 처방: `mapServerErrorMessage(raw, whitelist: const {}, fallback: '초대 정보를 불러오지 못했어요. 다시 시도해주세요.')`
+  로 **빈 화이트리스트 + 폴백**만 태운다(원문 노출 차단 진입점을 한 함수로
+  유지). 원문은 `developer.log`로만 남긴다.
+- 폴백 문구는 P2-1 표의 `invitation_accept_screen.dart:55` 확정값
+  `'초대 정보를 불러오지 못했어요. 다시 시도해주세요.'` 와 동일.
+
+**#3 그룹 생성 (`group_create_screen.dart:52`, `create_relationship_group`)
+— 화이트리스트 1행.**
+`create_relationship_group`의 `raise exception`은 `authentication required`
+**단 1건**이다(그 외는 순수 INSERT).
+
+| 매칭 키 (소문자 부분일치) | 확정 카피 |
+|---|---|
+| `authentication required` | `로그인이 만료됐어요. 다시 로그인해주세요.` |
+
+- 폴백: P2-1 표의 `group_create_screen.dart:54` 확정값
+  `'그룹을 만들지 못했어요. 다시 시도해주세요.'`
+- 도메인 상수 이름 제안: `groupCreateServerErrors`. 1행이라 P0-7의
+  `relationshipGroupServerErrors`(초대 생성/탈퇴/내보내기용, 키가 겹치지 않음)와
+  합치지 않는다 — 호출 RPC가 다르고, 섞으면 어느 화면이 어느 메시지에
+  도달하는지 추적이 흐려진다.
+
+**#4 초대 수락 (`invitation_accept_screen.dart:77`, `_accept` →
+`accept_relationship_invitation`) — 화이트리스트 6행, `_friendlyAcceptError`
+흡수.**
+`_friendlyAcceptError`(세 번째 매핑 변종)를 없애고 이 표 + 공용
+`mapServerErrorMessage`로 대체한다. 수락(`:77`)과 미리보기(`:51`)가 같은
+공용 함수를 타되, 미리보기는 위처럼 빈 화이트리스트를 넘긴다.
+
+`accept_relationship_invitation`의 `raise exception` 6건 전부:
+
+| 매칭 키 (소문자 부분일치) | 확정 카피 | 비고 |
+|---|---|---|
+| `authentication required` | `로그인이 만료됐어요. 다시 로그인해주세요.` | |
+| `invitation not found` | `존재하지 않는 초대 코드예요.` | |
+| `invitation is not pending` | `이미 처리됐거나 취소된 초대예요.` | 원문은 `invitation is not pending (status: %)` — `%`에 상태가 보간되므로 **부분일치 키**(`(status: ...)` 앞까지만) |
+| `invitation has expired` | `만료된 초대예요.` | |
+| `invitation is scoped to a different email address` | `초대장에 적힌 이메일과 지금 로그인한 계정이 달라요. 초대받은 이메일로 로그인해주세요.` | |
+| `already a member of this group` | `이미 이 그룹의 멤버예요.` | |
+
+- 폴백: P2-1 표의 `invitation_accept_screen.dart:79` 확정값
+  `'초대를 수락하지 못했어요. 다시 시도해주세요.'`
+- 도메인 상수 이름 제안: `invitationAcceptServerErrors`.
+- 위 6개 한글 문구는 P2-1 `invitation_accept_screen.dart` 표(수락 결과
+  분기별 문구)와 **글자까지 동일**하게 맞췄다 — 기존 `_friendlyAcceptError`
+  및 코드 분기가 이미 쓰던 문구와 사용자 눈에 차이가 없어야 한다.
+- `invitation is scoped to a different email address` 한 건만 P2-1 표에
+  대응 항목이 없어(이번에 신규 확정) 위 문구로 새로 정한다.
