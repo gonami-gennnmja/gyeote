@@ -28,7 +28,17 @@
 -- 재실행 안전성:
 --   pg_cron 1.4+는 `cron.schedule(job_name, ...)`이 동일 job_name에 대해
 --   upsert로 동작한다(중복 잡이 생기지 않음). Supabase는 1.4+를 제공한다.
+--
+-- 실행 권한:
+--   pg_cron 잡은 잡을 등록한 역할(Supabase에서 `supabase db push`는 `postgres`)
+--   로 실행된다. delete_expired_location_history()의 원본 grant는 `service_role`
+--   에만 있으므로(20260820090010), `postgres`에도 명시적으로 execute를 부여한다.
+--   이게 없으면 db push가 다른 역할로 도는 경우 잡이 매일 밤 `permission denied`
+--   로 조용히 실패하고 흔적은 `cron.job_run_details`에만 남는다("성공처럼 보이는
+--   실패"). 싼 보험이라 명시해 둔다.
 -- =============================================================================
+
+grant execute on function public.delete_expired_location_history(int) to postgres;
 
 do $outer$
 begin
@@ -42,14 +52,15 @@ begin
   -- pg_cron이 available이면 확장을 활성화한다(이미 활성이면 무시).
   execute 'create extension if not exists pg_cron';
 
-  -- 매일 03:17(UTC)에 보존기간(기본 14일) 경과 이력을 정리한다.
-  -- 시각은 트래픽이 낮은 새벽대이면 충분하고, 정확한 분은 중요하지 않다.
+  -- 매일 17:17 UTC = 02:17 KST(한국시간)에 보존기간(기본 14일) 경과 이력을
+  -- 정리한다. 곁에는 한국 타겟 앱이므로 UTC 새벽이 아니라 KST 새벽 기준으로
+  -- 잡는다(03:17 UTC는 12:17 KST로 점심 피크에 걸린다). 정확한 분은 중요하지 않다.
   perform cron.schedule(
     'gyeote-location-history-retention',
-    '17 3 * * *',
+    '17 17 * * *',
     'select public.delete_expired_location_history();'
   );
 
-  raise notice 'Scheduled pg_cron job "gyeote-location-history-retention" (daily 03:17 UTC).';
+  raise notice 'Scheduled pg_cron job "gyeote-location-history-retention" (daily 17:17 UTC / 02:17 KST).';
 end;
 $outer$;

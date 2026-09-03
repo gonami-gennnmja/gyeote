@@ -76,9 +76,17 @@ supabase db diff --linked   # 출력이 비어 있어야 정상
 
 1. `supabase db push`가 에러 없이 끝났다.
 2. `supabase db diff --linked` 출력이 비어 있다.
-3. **pg_cron 정리 잡이 실제로 등록됐다** — [3장 "잡 등록 확인"](#cron-job-verify).
-   `db push` 성공만으로는 3번이 보장되지 않는다(가드가 미활성 시 조용히
-   통과하므로). 잡이 없으면 마이그레이션 적용은 미완료로 간주한다.
+3. **pg_cron 정리 잡이 실제로 등록됐다.** 운영 DB에서 아래를 조회했을 때
+   **정확히 1행이 나오고 그 행의 `active` 가 `true`** 여야 한다:
+   ```sql
+   select jobid, jobname, schedule, command, active
+     from cron.job
+    where jobname = 'gyeote-location-history-retention';
+   ```
+   `db push` 성공만으로는 이게 보장되지 않는다(pg_cron 미활성이면 가드가 조용히
+   통과하므로). 행이 0개거나 `active = false`면 마이그레이션 적용은 미완료로
+   간주한다. 원격에 SQL을 실행하는 구체적 방법과 조치는
+   [3장 "잡 등록 확인"](#cron-job-verify) 참고.
 
 ---
 
@@ -97,7 +105,7 @@ supabase db diff --linked   # 출력이 비어 있어야 정상
 ### pg_cron
 
 - `20260903090001_schedule_location_history_retention.sql`이
-  `gyeote-location-history-retention` 잡(매일 03:17 UTC)을 등록한다.
+  `gyeote-location-history-retention` 잡(매일 17:17 UTC = 02:17 KST)을 등록한다.
 - **pg_cron이 대시보드에서 활성화돼 있지 않으면** 이 마이그레이션은 에러 없이
   통과하되 잡을 등록하지 못하고 NOTICE만 남긴다. 그 경우:
   1. 대시보드 Database > Extensions에서 `pg_cron` 활성화
@@ -114,7 +122,23 @@ supabase db diff --linked   # 출력이 비어 있어야 정상
 <a id="cron-job-verify"></a>
 #### 잡 등록 확인 (배포 완료 필수 게이트)
 
-운영 DB에 대해(로컬이 아니라 `--linked` 원격 연결로) 아래를 조회한다:
+**운영 DB에 SQL을 실행하는 방법 (둘 중 하나):**
+
+- **A. Supabase 대시보드 SQL Editor** — 프로젝트 대시보드 좌측 메뉴 `SQL Editor`
+  → `New query` → 아래 쿼리 붙여넣고 `Run`. 별도 접속 정보 불필요, 가장 간단.
+- **B. `psql` 직접 접속** — 프로젝트 대시보드 `Project Settings > Database` →
+  `Connection string` 의 **Session pooler** 또는 **Direct connection** 문자열을
+  복사해서:
+  ```bash
+  psql "postgresql://postgres.<project-ref>:<DB-PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+  ```
+  (`<DB-PASSWORD>`는 프로젝트 생성 시 설정한 Postgres 비밀번호. 대시보드에서
+  재설정 가능.) `supabase db push` 에 쓰는 것과 같은 자격증명이다.
+
+> `supabase db diff --linked` 는 SQL을 임의로 실행해주지 않는다 — 위 A 또는 B로
+> 직접 조회해야 한다.
+
+**조회 쿼리:**
 
 ```sql
 -- 1) 잡이 실제로 존재하고 active인지 — 행이 0개면 배포 미완료
@@ -134,6 +158,8 @@ select status, return_message, start_time, end_time
 - **쿼리 1의 결과가 1행이고 `active = true`가 아니면 배포를 완료로 치지
   않는다.** 마이그레이션이 "성공"했더라도 마찬가지다 — pg_cron 미활성이면
   마이그레이션은 성공하고 잡은 없다.
+- 쿼리 1이 `ERROR: relation "cron.job" does not exist` 를 내면 pg_cron 확장
+  자체가 안 켜진 것이다 → 대시보드에서 활성화.
 - 잡이 없으면: 대시보드에서 `pg_cron` 활성화 → `supabase db push` 재실행 →
   이 쿼리를 다시 통과시킨다. 또는 아래 2안으로 전환한다.
 
