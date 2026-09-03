@@ -55,7 +55,13 @@ android {
         // 가정(assumption): 최종 applicationId는 아직 확정되지 않았으므로
         // 프로젝트/조직 컨벤션에 맞춰 추후 변경 가능하다.
         applicationId "com.gyeote.app"
-        minSdk 23
+        // [제품 결정 2026-09-03] 지원 최소 버전을 Android 7.0(API 24)로 올린다.
+        // google_maps_flutter_android 2.19.13 이 minSdk 24 를 요구해서
+        // (그 패키지 android/build.gradle.kts) API 23 으로 두면 매니페스트 머지
+        // 단계에서 빌드가 깨진다. 지도가 v0.1 핵심 기능이라 우회 불가 →
+        // Android 6.0(API 23) 기기는 지원 대상에서 제외. flutter.minSdkVersion 은
+        // Flutter 3.47 기준 24 (flutter_tools gradle_utils.dart).
+        minSdkVersion flutter.minSdkVersion
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

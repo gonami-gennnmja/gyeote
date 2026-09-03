@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <rect width="1024" height="500" fill="#FF4081"/>
+  <g transform="translate(688,232) scale(0.52) translate(-512,-517)">
+    <path fill="#FFFFFF" fill-rule="evenodd" d="M 324.3 579.6 L 512 815 L 699.7 579.6 A 240 240 0 1 0 324.3 579.6 Z M 512 328 C 558 270.5 638.5 270.5 673 328 C 707.5 385.5 684.5 466 512 546.5 C 339.5 466 316.5 385.5 351 328 C 385.5 270.5 466 270.5 512 328 Z"/>
+  </g>
+  <text x="90" y="235" font-family="Noto Sans CJK KR" font-weight="700" font-size="88" fill="#FFFFFF">곁에</text>
+  <text x="92" y="315" font-family="Noto Sans CJK KR" font-weight="400" font-size="40" fill="#FFFFFF" fill-opacity="0.92">멀리 있어도, 곁에</text>
+</svg>
