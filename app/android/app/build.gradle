@@ -15,6 +15,24 @@ if (localPropertiesFile.exists()) {
 def flutterVersionCode = localProperties.getProperty("flutter.versionCode") ?: "1"
 def flutterVersionName = localProperties.getProperty("flutter.versionName") ?: "0.1.0"
 
+// Google Maps SDK 키. 저장소에 커밋하지 않는다. 우선순위:
+//   1) android/local.properties 의 MAPS_API_KEY  (로컬 개발 — 이 파일은 gitignore됨)
+//   2) 환경변수 MAPS_API_KEY                      (CI)
+// 둘 다 없으면 빈 값 — 지도가 회색으로 뜨지만 빌드 자체는 통과한다.
+def mapsApiKey = localProperties.getProperty("MAPS_API_KEY") ?: System.getenv("MAPS_API_KEY") ?: ""
+
+// 릴리즈 서명 설정. android/key.properties 는 gitignore돼 있으며 Play 업로드용
+// 키스토어 정보를 담는다(key.properties.example 참고). 파일이 없으면 아래
+// buildTypes.release 가 debug 서명으로 폴백한다 — 로컬 개발 편의를 위한 것이고,
+// 그렇게 서명된 APK/AAB 는 Play 스토어에 업로드할 수 없다.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withReader("UTF-8") { reader ->
+        keystoreProperties.load(reader)
+    }
+}
+
 android {
     namespace "com.gyeote.app"
     compileSdk 34
@@ -41,11 +59,31 @@ android {
         targetSdk 34
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
+
+        // AndroidManifest.xml 의 com.google.android.geo.API_KEY 에 주입된다.
+        manifestPlaceholders += [MAPS_API_KEY: mapsApiKey]
+    }
+
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties["keyAlias"]
+                keyPassword keystoreProperties["keyPassword"]
+                storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null
+                storePassword keystoreProperties["storePassword"]
+            }
+        }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.warn("[곁에] key.properties 가 없어 release 빌드를 debug 키로 서명합니다. " +
+                        "Play 스토어 업로드용 빌드에는 android/key.properties 를 설정하세요.")
+                signingConfig signingConfigs.debug
+            }
         }
     }
 }

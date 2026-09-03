@@ -1,0 +1,18 @@
+# 릴리즈(Play 스토어 업로드) 서명용 키스토어 정보 템플릿.
+#
+# 이 파일을 android/key.properties 로 복사한 뒤 실제 값을 채운다.
+# android/key.properties 와 *.jks 는 .gitignore 돼 있으므로 커밋되지 않는다.
+#
+#   cp android/key.properties.example android/key.properties
+#
+# 키스토어가 없으면 새로 만든다(업로드 키):
+#   keytool -genkey -v -keystore ~/gyeote-upload.jks -keyalg RSA -keysize 2048 \
+#     -validity 10000 -alias upload
+#
+# key.properties 가 없으면 release 빌드는 debug 키로 서명되며 Play 업로드가 불가하다.
+
+storePassword=키스토어_비밀번호
+keyPassword=키_비밀번호
+keyAlias=upload
+# storeFile 은 절대경로 또는 android/app/ 기준 상대경로.
+storeFile=/absolute/path/to/gyeote-upload.jks

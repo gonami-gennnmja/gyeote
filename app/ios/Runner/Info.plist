@@ -14,6 +14,11 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>gyeote</string>
+	<!-- Google Maps SDK 키. 빌드 설정 MAPS_API_KEY 로 치환된다
+	     (ios/Flutter/Maps.xcconfig, gitignore됨 — Maps.xcconfig.example 참고).
+	     AppDelegate.swift 가 이 값을 읽어 GMSServices 에 등록한다. -->
+	<key>MapsApiKey</key>
+	<string>$(MAPS_API_KEY)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

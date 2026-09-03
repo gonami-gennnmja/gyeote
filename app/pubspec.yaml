@@ -41,6 +41,24 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^4.0.0
 
+  # 런처 아이콘 생성기. Din이 원본 아이콘(assets/icon/ 아래 1024px PNG)을 주면
+  # `dart run flutter_launcher_icons` 한 번으로 android mipmap 세트 + iOS
+  # AppIcon 세트가 생성된다(아래 flutter_launcher_icons 설정 블록 참고).
+  # 현재 android/app/src/main/res 아래 mipmap 디렉터리가 없어 릴리즈 빌드가
+  # 리소스 없음으로 실패하므로 v0.1 전에 반드시 실행해야 한다.
+  flutter_launcher_icons: ^0.14.1
+
+# Din 아이콘 전달 시 경로/여백 스펙 확정 후 실행. adaptive(전경/배경) 값은
+# 디자인 확정 전 임시이며, Din 스펙에 맞춰 교체한다.
+flutter_launcher_icons:
+  image_path: "assets/icon/app_icon.png"
+  android: "ic_launcher"
+  min_sdk_android: 23
+  adaptive_icon_background: "assets/icon/app_icon_background.png"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  ios: true
+  remove_alpha_ios: true
+
 flutter:
   uses-material-design: true
 

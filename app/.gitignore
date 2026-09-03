@@ -13,6 +13,11 @@ migrate_working_dir/
 # 실제 키가 들어가는 로컬 환경 파일 (더미 값만 담긴 .env.example은 커밋됨)
 .env
 
+# 네이티브 빌드에 주입하는 비밀값 (*.example 템플릿만 커밋됨)
+#  - android/key.properties : 릴리즈 서명 키스토어 정보 (아래 Android 절에도 있음)
+#  - ios/Flutter/Maps.xcconfig : iOS Google Maps SDK 키
+ios/Flutter/Maps.xcconfig
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -30,7 +35,6 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 build/
-/pubspec.lock
 
 # Android related
 android/**/gradle-wrapper.jar

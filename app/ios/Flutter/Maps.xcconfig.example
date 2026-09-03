@@ -1,0 +1,23 @@
+// iOS Google Maps SDK 키 주입용 xcconfig 템플릿.
+//
+// [상태] v0.1은 Android 단독 출시라 iOS 프로젝트 스캐폴드(Runner.xcodeproj,
+// Flutter/Debug.xcconfig·Release.xcconfig)가 아직 없다. 그래서 이 파일과
+// AppDelegate.swift 의 키 읽기 코드는 준비만 해두고, 아래 #include 배선은
+// v0.2에서 iOS 스캐폴딩할 때 함께 마무리한다. 지금 반쯤 돼 있는 이유가 이것.
+//
+// 이 파일을 ios/Flutter/Maps.xcconfig 로 복사한 뒤 실제 키를 채운다.
+// ios/Flutter/Maps.xcconfig 는 .gitignore 돼 있어 커밋되지 않는다.
+//
+//   cp ios/Flutter/Maps.xcconfig.example ios/Flutter/Maps.xcconfig
+//
+// Flutter 표준 iOS 프로젝트에서는 ios/Flutter/Debug.xcconfig 와
+// Release.xcconfig 가 각각 이 파일을 #include 해야 MAPS_API_KEY 가
+// 빌드 설정으로 노출된다. 예:
+//
+//   #include "Maps.xcconfig"
+//
+// 그러면 Info.plist 의 $(MAPS_API_KEY) 가 이 값으로 치환되고
+// AppDelegate.swift 가 읽어 GMSServices.provideAPIKey 에 넘긴다.
+// CI 에서는 이 파일 대신 xcodebuild 인자로 MAPS_API_KEY=... 를 전달해도 된다.
+
+MAPS_API_KEY=여기에_iOS_Maps_SDK_키
