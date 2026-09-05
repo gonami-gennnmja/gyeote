@@ -83,10 +83,11 @@ supabase db diff --linked   # 출력이 비어 있어야 정상
      from cron.job
     where jobname = 'gyeote-location-history-retention';
    ```
-   `db push` 성공만으로는 이게 보장되지 않는다(pg_cron 미활성이면 가드가 조용히
-   통과하므로). 행이 0개거나 `active = false`면 마이그레이션 적용은 미완료로
-   간주한다. 원격에 SQL을 실행하는 구체적 방법과 조치는
-   [3장 "잡 등록 확인"](#cron-job-verify) 참고.
+   `db push` 성공만으로는 이게 보장되지 않는다 — pg_cron이 미활성이면
+   (검증 안 됐지만) 마이그레이션이 조용히 성공하고 잡만 없거나, `db push`
+   자체가 실패할 수 있다. 어느 쪽이든 이 쿼리로 확인한다. 행이 0개거나
+   `active = false`면 마이그레이션 적용은 미완료로 간주한다. 원격에 SQL을
+   실행하는 구체적 방법과 조치는 [3장 "잡 등록 확인"](#cron-job-verify) 참고.
 
 ---
 
@@ -193,8 +194,9 @@ select status, return_message, start_time, end_time
 ```
 
 - **쿼리 1의 결과가 1행이고 `active = true`가 아니면 배포를 완료로 치지
-  않는다.** 마이그레이션이 "성공"했더라도 마찬가지다 — pg_cron 미활성이면
-  마이그레이션은 성공하고 잡은 없다.
+  않는다.** 마이그레이션이 "성공"했더라도 마찬가지다 — pg_cron이 미활성이면
+  (검증 안 됐지만) 마이그레이션이 조용히 성공하고 잡만 없거나, `db push`
+  자체가 실패할 수 있다. 어느 쪽이든 이 쿼리로 확인한다.
 - 쿼리 1이 `ERROR: relation "cron.job" does not exist` 를 내면 pg_cron 확장
   자체가 안 켜진 것이다 → 대시보드에서 활성화.
 - 잡이 없으면: 대시보드에서 `pg_cron` 활성화 → `supabase db push` 재실행 →
