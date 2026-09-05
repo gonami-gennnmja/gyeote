@@ -100,24 +100,61 @@ supabase db diff --linked   # 출력이 비어 있어야 정상
 |---|---|---|
 | `pgcrypto` | 초대 코드 생성(`gen_random_bytes`) | `20260820090001`이 자동 활성화. 보통 추가 조치 불필요 |
 | `postgis` | 위치 좌표/격자 반올림(`ST_SnapToGrid` 등) | `20260820090007`이 자동 활성화. Supabase는 available 기본 제공 |
-| `pg_cron` | `location_history` 보존기간 정리 스케줄 | **대시보드 Database > Extensions에서 수동 활성화 필요.** 아래 참고 |
+| `pg_cron` | `location_history` 보존기간 정리 스케줄 | 대시보드 Database > Extensions에서 활성화(권장 — 아래 참고). 활성화 이전 상태에서 이 마이그레이션이 어떻게 반응하는지는 **미확인** |
 
 ### pg_cron
 
 - `20260903090001_schedule_location_history_retention.sql`이
   `gyeote-location-history-retention` 잡(매일 17:17 UTC = 02:17 KST)을 등록한다.
-- **pg_cron이 대시보드에서 활성화돼 있지 않으면** 이 마이그레이션은 에러 없이
-  통과하되 잡을 등록하지 못하고 NOTICE만 남긴다. 그 경우:
-  1. 대시보드 Database > Extensions에서 `pg_cron` 활성화
-  2. `supabase db push` 재실행 (마이그레이션 재실행은 안전 — 잡 이름 기준 upsert)
 
-> ⚠️ **가드가 만드는 배포 리스크 — 반드시 별도 확인.** 위 가드(가용하지
-> 않으면 에러 대신 NOTICE)는 로컬/미활성 환경에서 마이그레이션이 깨지지 않게
-> 하려는 것이지만, 뒤집으면 **운영에서 pg_cron을 켜는 걸 잊어도
-> `supabase db push`는 "성공"으로 끝난다.** 그러면 아무도 모르는 채로
-> `location_history`가 무한정 쌓이고, 개인정보처리방침의 "위치 이력 14일 보관"이
-> 출시 첫날부터 허위가 된다. **`db push` 성공 여부와 무관하게, 아래 "잡 등록
-> 확인"을 독립 항목으로 반드시 통과시킨다.**
+**가드-true 경로 로컬 재현 검증됨 (2026-09-05, Tom).** 상세:
+`pg_cron_guard_true_verification_2026-09-05.md`(Tom scratchpad).
+
+- **검증된 것.** 로컬 PG14에 `postgresql-14-cron` 패키지를 설치하고
+  `shared_preload_libraries = 'pg_cron'`을 **먼저 설정한 뒤 Postgres를
+  재시작한** 상태에서 이 마이그레이션을 실행했다. 이 상태(=pg_cron이 이미
+  preload된 상태)에서는 `create extension if not exists pg_cron` → `cron.job`
+  실제 행 생성 → `postgres` 역할 실행 성공, 그리고 grant 없는 역할에서
+  `permission denied` 재현까지 SQL 레벨 동작이 4개 항목 전부 실제 실행으로
+  확인됐다. 패키지 자체가 없는 상태(설치 전)에서는 `pg_available_extensions`에
+  pg_cron이 없어 가드가 NOTICE-and-skip으로 빠지는 것도 확인됐다.
+- **검증되지 않은 것 — 과대해석 금지.** 이 재현은 "**대시보드 토글을 이미
+  켠 뒤**의 동작"을 재현한 것이지, "**대시보드 토글을 아직 안 켠 상태**에서
+  `db push`를 돌리면 어떻게 되는가"는 재현하지 않았다(`shared_preload_libraries`
+  설정+재시작을 Tom이 먼저 손으로 했기 때문 — Rena 지적, 2026-09-05). 즉
+  운영에서 pg_cron을 한 번도 활성화한 적 없는 프로젝트에 이 마이그레이션을
+  먼저 돌리면 실제로 무슨 일이 일어나는지는 **여전히 미확인**이다. 가능한
+  시나리오 최소 두 가지를 열어둔다:
+  - (가) `pg_available_extensions`에 pg_cron이 없어 가드가 조용히 NOTICE만
+    남기고 통과 (지금까지 문서가 가정해온 실패 모드).
+  - (나) `pg_available_extensions`에는 있지만 `shared_preload_libraries`에는
+    없어서 `create extension pg_cron` 자체가 하드 에러로 실패 — 이 경우
+    DO 블록이 예외를 던지므로 `supabase db push`가 "성공"으로 끝나지 않고
+    그 자리에서 실패로 드러난다(=오히려 (가)보다 눈에 잘 띄는 실패).
+  - 어느 쪽이 맞는지, 혹은 Supabase가 모든 프로젝트에 pg_cron을 이미
+    preload해둬서 애초에 이 분기 자체가 발생하지 않는지는 실제 운영
+    프로젝트에서 처음 배포할 때 확인된다.
+- **어느 시나리오든 게이트가 잡아낸다.** (가)처럼 조용히 스킵되면
+  [잡 등록 확인](#cron-job-verify) 쿼리에서 `cron.job` 행이 0개로 나와 걸린다.
+  (나)처럼 `create extension`이 하드 에러면 `db push` 자체가 실패로
+  보고되어 배포 담당이 그 자리에서 알아챈다. 두 경우 모두 "배포가 성공한
+  것처럼 보이는데 정리 잡만 조용히 없는" 상태로는 끝나지 않는다 — 대시보드
+  Database > Extensions에서 pg_cron을 **먼저 활성화하고** `supabase db push`
+  를 돌리는 순서를 권장 경로로 유지한다.
+  1. 대시보드 Database > Extensions에서 `pg_cron` 활성화
+  2. `supabase db push` 실행/재실행 (재실행 자체는 안전 — 잡 이름 기준 upsert,
+     Tom이 재실행 멱등성도 확인함)
+  3. [잡 등록 확인](#cron-job-verify) 게이트 통과 확인
+  4. pg_cron을 끝내 쓸 수 없으면 아래 2안(예약 Edge Function)으로 전환
+
+> ⚠️ **`db push` "성공"이 잡 등록을 보장하지 않는다 — 반드시 별도 확인.**
+> 검증된 건 "이미 활성화된 상태에서의 SQL 레벨 동작"뿐이고, "활성화 이전
+> 상태에서 처음 배포할 때 무슨 일이 나는가"는 미확인이다. 검증 안 된 걸
+> 검증된 것처럼 적으면 이번 라운드 내내 잡아온 "성공처럼 보이는 실패"를
+> 문서 자체가 재현하는 꼴이 된다. 그러니 어느 시나리오가 실제인지와 무관하게,
+> **`db push` 성공 여부와 무관하게, 아래 "잡 등록 확인"을 독립 항목으로
+> 반드시 통과시킨다.** 이게 확인되면 `location_history`가 무한정 쌓여
+> 개인정보처리방침의 "위치 이력 14일 보관"이 허위가 되는 상황을 막는다.
 
 <a id="cron-job-verify"></a>
 #### 잡 등록 확인 (배포 완료 필수 게이트)
