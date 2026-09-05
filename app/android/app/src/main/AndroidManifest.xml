@@ -2,16 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- 위치 공유 기능(이번 라운드 추가)에 필요한 권한.
-         ACCESS_BACKGROUND_LOCATION은 이번 라운드 범위(포그라운드 수집)에서는
-         실제로 요청하지 않지만, 다음 라운드에서 백그라운드 상시 공유를
-         구현할 때를 대비해 선언만 해둔다(Android 10+는 별도 배경 위치 권한
-         요청 플로우가 필요하며, Play Store 정책상 별도 심사 사유 설명이
-         필요함 — 실제 요청 코드는 permission/location_permission_service.dart
-         참고, 현재는 whileInUse까지만 요청). -->
+    <!-- 위치 공유 기능에 필요한 권한. v0.1은 포그라운드(앱 사용 중) 수집만
+         하므로 ACCESS_BACKGROUND_LOCATION은 선언하지 않는다 — 선언만 있어도
+         Play가 배경 위치 정책 심사(신고서 + 데모 영상, 수 주 소요)를 요구하기
+         때문이다. 배경 상시 공유는 v0.2 기능이며 그때 이 권한을 다시 넣고
+         심사받는다. 실제 요청 코드는
+         permission/location_permission_service.dart 참고(whileInUse까지만). -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <application
         android:label="곁에"

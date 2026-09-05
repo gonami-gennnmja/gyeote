@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -13,15 +14,19 @@ enum LocationPermissionResult {
   /// 바로 이 상태로 취급되는 경우가 많음) — 설정 앱으로 유도해야 함.
   permanentlyDenied,
 
-  /// "앱 사용 중"만 허용됨. 이번 라운드 기능(포그라운드 위치 공유)은 이 정도로
-  /// 충분하다.
+  /// "앱 사용 중" 위치 권한이 허용됨. v0.1 기능(포그라운드 위치 공유)은 이
+  /// 정도로 충분하다.
   grantedWhileInUse,
-
-  /// 백그라운드에서도 위치 추적 허용("항상 허용").
-  grantedAlways,
 }
 
 /// `permission_handler` + `geolocator`를 조합해 위치 권한 흐름을 감싼다.
+///
+/// v0.1은 **"앱 사용 중" 위치만** 다룬다. "항상 허용"(`ACCESS_BACKGROUND_LOCATION`
+/// / iOS Always)은 조회도 요청도 하지 않는다 — 배경 위치를 선언만 해도 Play가
+/// 별도 정책 심사(수 주)를 요구하기 때문에 매니페스트에서 뺐고, 선언되지 않은
+/// `Permission.locationAlways`를 Android에서 조회하면 `permanentlyDenied`가
+/// 돌아와 첫 실행 사용자가 잘못된 "영구 거부" 화면을 보게 되는 버그가 있었다.
+/// 배경 상시 공유와 함께 v0.2에서 되살린다.
 ///
 /// - 상태 조회/설정 앱 이동: `permission_handler` (영구 거부 판별,
 ///   `openAppSettings()`가 명확하게 분리되어 있어 다루기 쉬움).
@@ -40,36 +45,29 @@ class LocationPermissionService {
     }
 
     final whileInUse = await Permission.locationWhenInUse.status;
-    final always = await Permission.locationAlways.status;
-
-    return _mapStatuses(whileInUse: whileInUse, always: always);
+    return mapStatus(whileInUse);
   }
 
-  /// OS 권한 다이얼로그를 띄운다. iOS는 "항상 허용"을 한 번에 요청하지 않는
-  /// 것이 권장 패턴이므로, 우선 "앱 사용 중"만 요청한다. 이번 라운드는 앱이
-  /// 포그라운드에 있을 때의 위치 공유만 다루므로 이것으로 충분하다(백그라운드
-  /// 상시 추적은 범위 밖).
+  /// OS 권한 다이얼로그를 띄운다. "앱 사용 중"만 요청한다 — v0.1은 앱이
+  /// 포그라운드에 있을 때의 위치 공유만 다룬다(백그라운드 상시 추적은 v0.2).
   Future<LocationPermissionResult> requestWhileInUse() async {
     if (!await isLocationServiceEnabled()) {
       return LocationPermissionResult.serviceDisabled;
     }
 
     final status = await Permission.locationWhenInUse.request();
-    final always = await Permission.locationAlways.status;
-    return _mapStatuses(whileInUse: status, always: always);
+    return mapStatus(status);
   }
 
   Future<void> openAppSettings() => openAppSettingsPermissionHandler();
 
   Future<void> openLocationSettings() => Geolocator.openLocationSettings();
 
-  LocationPermissionResult _mapStatuses({
-    required PermissionStatus whileInUse,
-    required PermissionStatus always,
-  }) {
-    if (always.isGranted) return LocationPermissionResult.grantedAlways;
+  /// "앱 사용 중" 권한 상태 하나만으로 판정한다. `always`는 v0.1에서 쓰지 않는다.
+  @visibleForTesting
+  static LocationPermissionResult mapStatus(PermissionStatus whileInUse) {
     if (whileInUse.isGranted) return LocationPermissionResult.grantedWhileInUse;
-    if (whileInUse.isPermanentlyDenied || always.isPermanentlyDenied) {
+    if (whileInUse.isPermanentlyDenied) {
       return LocationPermissionResult.permanentlyDenied;
     }
     return LocationPermissionResult.denied;

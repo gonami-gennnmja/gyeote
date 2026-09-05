@@ -84,8 +84,7 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
     if (!mounted) return;
 
     final alreadyGranted =
-        status == LocationPermissionResult.grantedWhileInUse ||
-        status == LocationPermissionResult.grantedAlways;
+        status == LocationPermissionResult.grantedWhileInUse;
 
     if (!alreadyGranted) {
       final granted = await Navigator.of(context).push<bool>(

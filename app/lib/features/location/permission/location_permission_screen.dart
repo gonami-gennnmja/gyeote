@@ -35,8 +35,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen> {
 
       if (!mounted) return;
 
-      if (result == LocationPermissionResult.grantedWhileInUse ||
-          result == LocationPermissionResult.grantedAlways) {
+      if (result == LocationPermissionResult.grantedWhileInUse) {
         Navigator.of(context).pop(true);
       }
     } finally {
