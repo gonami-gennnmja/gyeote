@@ -58,8 +58,9 @@ android {
     }
 
     defaultConfig {
-        // 가정(assumption): 최종 applicationId는 아직 확정되지 않았으므로
-        // 프로젝트/조직 컨벤션에 맞춰 추후 변경 가능하다.
+        // [제품 결정 2026-09-05, 가인님 확정] applicationId는 com.gyeote.app로
+        // 확정이며 이후 변경하지 않는다. 스토어 등록 후에는 변경 불가하고,
+        // Google Maps API 키 제한(패키지명 기준)도 이 값에 걸려 있다.
         applicationId "com.gyeote.app"
         // [제품 결정 2026-09-03] 지원 최소 버전을 Android 7.0(API 24)로 올린다.
         // google_maps_flutter_android 2.19.13 이 minSdk 24 를 요구해서
