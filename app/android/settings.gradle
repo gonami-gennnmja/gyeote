@@ -16,10 +16,18 @@ pluginManagement {
     }
 }
 
+// [제품/툴체인 결정 2026-09-05] AGP 8.1.0 / Kotlin 1.9.10 는 Gradle 8.14.3
+// 조합에서 버전 체크가 아니라 바이너리 호환성 자체가 깨져 크래시한다
+// (`:app:kgpVersion` NoSuchMethodError). 둘 다 flutter_tools의 하드 floor
+// (errorAGPVersion 8.11.1 / errorKGPVersion 2.2.20)까지 올렸다. AGP는 9.x 대신
+// 8.13.0을 골랐다 — AGP 9는 newDsl(.gradle.kts) 강제 전환이 걸려 있어 이 Groovy
+// DSL 프로젝트를 통째로 마이그레이션해야 하고, 지금 목표(debug 빌드 통과)에는
+// 과하다. AGP 9 전환은 별도 작업으로 미룬다. 근거·시행착오 전체 기록은 Tom의
+// android_toolchain_bump_justification_2026-09-05.md 참고.
 plugins {
     id "dev.flutter.flutter-plugin-loader" version "1.0.0"
-    id "com.android.application" version "8.1.0" apply false
-    id "org.jetbrains.kotlin.android" version "1.9.10" apply false
+    id "com.android.application" version "8.13.0" apply false
+    id "org.jetbrains.kotlin.android" version "2.2.20" apply false
 }
 
 include ":app"

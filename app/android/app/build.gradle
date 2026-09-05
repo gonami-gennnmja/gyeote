@@ -35,7 +35,13 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.gyeote.app"
-    compileSdk 34
+    // [제품/툴체인 결정 2026-09-05] 34 -> 36. google_maps_flutter_android /
+    // geolocator_android 등 여러 플러그인이 Flutter 3.47.1의 컴파일 기준인
+    // FlutterExtension.compileSdkVersion(=36)으로 컴파일된다. AGP는 의존
+    // 라이브러리보다 앱의 compileSdk가 낮으면 매니페스트 병합에서 하드 에러를
+    // 낸다 — 34에서도 이미 "requires Android SDK version 36 or higher" 경고가
+    // 떠 있었다. targetSdk는 34로 그대로 둔다(compileSdk만 올리는 게 정상).
+    compileSdk 36
     ndkVersion flutter.ndkVersion
 
     compileOptions {
