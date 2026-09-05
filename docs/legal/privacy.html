@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index,follow">
+<title>곁에 개인정보처리방침</title>
+<style>
+  :root { --ink:#1c1c1e; --muted:#6b6b70; --accent:#FF4081; --line:#ececec; --bg:#ffffff; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+    line-height:1.7; font-size:16px;
+  }
+  main { max-width:760px; margin:0 auto; padding:40px 20px 80px; }
+  header { border-bottom:2px solid var(--accent); padding-bottom:16px; margin-bottom:8px; }
+  h1 { font-size:24px; margin:0 0 4px; }
+  .meta { color:var(--muted); font-size:14px; }
+  h2 { font-size:18px; margin:32px 0 8px; }
+  p, li { margin:8px 0; }
+  ul { padding-left:20px; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; font-size:14px; }
+  th, td { border:1px solid var(--line); padding:8px 10px; text-align:left; vertical-align:top; }
+  th { background:#faf3f6; }
+  .fill { background:#fff2c8; padding:0 4px; border-radius:3px; }
+  .scope { border:1px solid var(--accent); border-left-width:4px; border-radius:6px; padding:12px 16px; margin:16px 0; background:#fff5f8; }
+  .scope p { margin:6px 0; }
+  footer { margin-top:48px; padding-top:16px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#f2f2f4; --muted:#a9a9 b0; --line:#333; --bg:#161618; }
+    th { background:#2a2024; }
+    .fill { background:#4a3d12; }
+    .scope { background:#2a1c22; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>곁에 개인정보처리방침</h1>
+    <p class="meta">시행일: <span class="fill">[[YYYY-MM-DD]]</span></p>
+  </header>
+
+  <p><span class="fill">[[사업자명]]</span>(이하 &ldquo;회사&rdquo;)은 「개인정보 보호법」 및
+  「위치정보의 보호 및 이용 등에 관한 법률」 등 관련 법령을 준수하며, 이용자의 개인정보를
+  보호하기 위해 다음과 같이 개인정보처리방침을 둡니다.</p>
+
+  <h2>제1조 (수집하는 개인정보 항목)</h2>
+  <p>회사는 서비스 제공을 위해 아래의 개인정보를 수집합니다.</p>
+  <ul>
+    <li>회원가입 시: 이메일 주소, 비밀번호(암호화하여 저장), 닉네임</li>
+    <li>서비스 이용 중 자동 수집 또는 이용자 입력:
+      <ul>
+        <li>위치정보: 기기의 GPS/네트워크 기반 위치 좌표</li>
+        <li>위치 관련 부가정보: 위치 정확도, 기기 배터리 잔량 및 충전 여부, 이동 상태(정지/도보/이동), 위치 측정 시각</li>
+        <li>관계 그룹 정보: 그룹 이름, 관계 유형, 그룹 구성원, 초대 코드</li>
+        <li>공유 설정: 그룹별 위치 공개 범위, 일시중지 설정</li>
+      </ul>
+    </li>
+    <li>선택 항목: 프로필 이미지</li>
+  </ul>
+
+  <div class="scope">
+    <p><strong>위치정보 수집 범위: 앱 실행 중(포그라운드)에 한정</strong></p>
+    <p>본 방침 시행일 기준으로, 곁에는 앱이 실행 중이고 화면에 떠 있는 동안에만
+    위치를 수집합니다. 앱이 종료되거나 화면 밖(백그라운드)으로 전환되면 위치
+    수집이 즉시 중단됩니다. 이를 위해 운영체제 차원의 백그라운드 위치 접근
+    권한(Android &ldquo;항상 허용&rdquo;, iOS &ldquo;항상&rdquo;)을 요청하지도,
+    보유하지도 않습니다.</p>
+    <p>추후 실시간성 향상을 위해 앱이 꺼져 있을 때도 위치를 공유하는 기능을
+    도입할 경우, 해당 기능을 적용하기 전에 본 방침을 개정하고 제11조에 따라
+    사전 고지합니다.</p>
+  </div>
+
+  <h2>제2조 (개인정보의 수집 및 이용 목적)</h2>
+  <ul>
+    <li>회원 식별 및 인증, 서비스 제공</li>
+    <li>이용자가 설정한 관계 그룹 구성원에게 위치 공유</li>
+    <li>&ldquo;대략&rdquo; 모드 선택 시 좌표를 약 100m 격자로 하향 처리하여 제공</li>
+    <li>이동 경로 확인 등 위치 이력 기반 기능 제공</li>
+    <li>서비스 운영, 부정 이용 방지, 문의 대응</li>
+  </ul>
+
+  <h2>제3조 (개인정보의 보유 및 이용 기간)</h2>
+  <ul>
+    <li>계정 정보(이메일, 닉네임 등): 회원 탈퇴 시까지. 탈퇴 시 지체 없이 파기합니다.</li>
+    <li>최신 위치 스냅샷: 최신 1건만 보관하며, 이용자가 모든 그룹에 대해 위치 공유를 &ldquo;끄기&rdquo;로 설정하면 서버에 저장된 위치를 즉시 삭제합니다.</li>
+    <li>위치 이동 이력: 수집일로부터 최대 14일간 보관 후 자동 삭제합니다.</li>
+    <li>관계 그룹·초대 정보: 그룹 탈퇴 또는 계정 삭제 시 파기. 초대 코드는 생성일로부터 7일 후 만료됩니다.</li>
+    <li>관계 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.</li>
+  </ul>
+
+  <h2>제4조 (개인정보의 제3자 제공)</h2>
+  <p>회사는 이용자의 개인정보를 원칙적으로 외부에 제공하지 않습니다. 다만 다음의 경우는 예외로 합니다.</p>
+  <ul>
+    <li>이용자가 위치 공유를 설정한 관계 그룹의 구성원에게, 이용자가 선택한 공개 범위(정밀/대략) 내에서 위치정보가 제공됩니다. 이용자는 언제든지 공유를 끄거나 일시중지할 수 있습니다.</li>
+    <li>법령에 근거하거나 수사기관의 적법한 요청이 있는 경우.</li>
+  </ul>
+
+  <h2>제5조 (개인정보 처리의 위탁)</h2>
+  <p>회사는 서비스 제공을 위해 아래와 같이 개인정보 처리 업무를 위탁합니다.</p>
+  <table>
+    <tr><th>수탁자</th><th>위탁 업무</th></tr>
+    <tr><td>Supabase, Inc.</td><td>회원 인증, 데이터베이스, 실시간 통신 등 서버 인프라 운영</td></tr>
+    <tr><td>Google LLC</td><td>지도 표시 기능 제공(지도 렌더링을 위해 기기 위치가 전달될 수 있음)</td></tr>
+  </table>
+
+  <h2>제6조 (위치정보의 처리) &mdash; 「위치정보의 보호 및 이용 등에 관한 법률」에 따른 고지</h2>
+  <ul>
+    <li>위치정보 수집 방법: 기기의 GPS 및 네트워크(Wi-Fi/기지국) 신호를 이용하여 앱이 실행 중(포그라운드)일 때만 수집합니다. 앱을 종료하거나 화면 밖으로 전환하면 수집이 중단되며, 백그라운드 위치 접근 권한은 요청·보유하지 않습니다(위 &ldquo;위치정보 수집 범위&rdquo; 참고). 이 범위를 변경(예: 백그라운드 수집 도입)할 경우 사전에 방침을 개정하여 고지합니다.</li>
+    <li>이용 목적: 이용자가 설정한 관계 그룹 구성원에게 위치를 공유하고, 위치 이력 기반 기능을 제공하기 위함입니다.</li>
+    <li>보유 기간: 최신 위치는 최신 1건만, 위치 이력은 최대 14일간 보관합니다. 모든 그룹 공유가 꺼진 경우 저장된 위치를 즉시 삭제합니다.</li>
+    <li>제3자 제공: 위치정보를 이용자가 지정한 관계 그룹 구성원에게 제공하며, 이용자는 앱 내에서 현재 공유 상태를 항상 확인할 수 있습니다. <span class="fill">[[제공 시 통보 방식 — 앱 내 상시 표시로 갈음 가능한지 법무 확인 후 확정]]</span></li>
+    <li>이용자는 위치정보 수집·이용·제공에 대한 동의를 언제든지 철회할 수 있으며, 공유 &ldquo;끄기&rdquo; 설정 또는 회원 탈퇴로 철회할 수 있습니다.</li>
+    <li>8세 이하의 아동 등의 보호의무자가 아동 등의 생명·신체 보호를 위해 위치정보 이용에 동의하는 경우에 관한 사항: <span class="fill">[[해당 시 명시, 미해당 시 &ldquo;해당 없음&rdquo;]]</span></li>
+  </ul>
+
+  <h2>제7조 (이용자 및 법정대리인의 권리와 행사 방법)</h2>
+  <p>이용자는 언제든지 다음의 권리를 행사할 수 있습니다.</p>
+  <ul>
+    <li>개인정보 열람, 정정, 삭제, 처리정지 요구</li>
+    <li>위치 공유 중지(그룹별 &ldquo;끄기&rdquo;/일시중지), 관계 그룹 탈퇴</li>
+    <li>회원 탈퇴를 통한 개인정보 전체 삭제</li>
+  </ul>
+  <p>권리 행사는 앱 내 설정 또는 <span class="fill">[[문의 연락처]]</span>로 요청할 수 있습니다.</p>
+
+  <h2>제8조 (개인정보의 파기)</h2>
+  <p>보유 기간이 경과하거나 처리 목적이 달성된 개인정보는 지체 없이 파기합니다. 전자적 파일은 복구 불가능한 방법으로 삭제하고, 위치 이력은 자동화된 정기 삭제 절차로 파기합니다.</p>
+
+  <h2>제9조 (개인정보의 안전성 확보 조치)</h2>
+  <ul>
+    <li>전송 구간 암호화(HTTPS/TLS)</li>
+    <li>데이터베이스 접근 통제(행 수준 보안으로 본인 및 공유 권한이 있는 구성원만 조회 가능)</li>
+    <li>&ldquo;대략&rdquo; 모드의 좌표 하향 처리를 서버에서 강제 적용</li>
+    <li>비밀번호 등 인증정보의 암호화 저장</li>
+  </ul>
+
+  <h2>제10조 (개인정보 보호책임자)</h2>
+  <ul>
+    <li>성명/직책: <span class="fill">[[성명 / 직책]]</span></li>
+    <li>연락처: <span class="fill">[[이메일]]</span></li>
+  </ul>
+
+  <h2>제11조 (개인정보처리방침의 변경)</h2>
+  <p>이 개인정보처리방침은 시행일로부터 적용되며, 내용이 변경되는 경우 최소 7일 전에 앱 공지 또는 이메일을 통해 알립니다.</p>
+
+  <footer>
+    <p>곁에(Gyeote) &middot; 최종 업데이트: <span class="fill">[[YYYY-MM-DD]]</span></p>
+  </footer>
+</main>
+</body>
+</html>
