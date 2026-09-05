@@ -28,6 +28,33 @@ echo "MAPS_API_KEY=<Maps SDK 키>" >> android/local.properties
 비어 있어도 빌드는 통과하고 지도만 회색으로 뜨므로, 이 단계를 빼먹으면 빌드 실패가
 아니라 스모크 테스트에서 지도가 안 뜨는 걸로 뒤늦게 드러난다 — 순서대로 진행할 것.
 
+주입이 실제로 됐는지는 빌드 후 `aapt2 dump xmltree <apk> --file AndroidManifest.xml`로
+`com.google.android.geo.API_KEY`의 `android:value`가 `AIza`로 시작하는 실제 키인지
+확인한다(`${MAPS_API_KEY}` 그대로면 안 읽힌 것).
+
+### 2-1. Maps 키 제한 (Google Cloud 콘솔) — SHA-1 4종을 모두 등록
+
+Maps 키는 반드시 "Android 앱" 제한을 걸어야 한다(패키지명 + 서명 인증서 SHA-1). 이때
+등록해야 할 SHA-1이 **한 개가 아니다.** 빠뜨리면 "어떤 빌드에서는 지도가 뜨는데 다른
+빌드에서만 안 뜨는" 형태로 터진다.
+
+| # | 키 종류 | 언제 등록 가능 | 안 넣으면 |
+|---|---|---|---|
+| (a) | debug 키스토어 (개발자 각자 머신) | 지금. 각자 `keytool -list -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey` | 그 개발자의 로컬 debug 빌드에서 지도가 회색 |
+| (b) | debug 키스토어 (CI/샌드박스) | 지금. 위와 같은 명령을 CI 환경에서 | CI 빌드 산출물로 지도 확인 불가 |
+| (c) | 릴리즈 업로드 키스토어 | 실물 키스토어 수령 후. `keytool -list -v -keystore <업로드키.jks> -alias <alias>` | 로컬에서 만든 release 빌드에서 지도가 회색 |
+| (d) | **Play 앱 서명 키** | **첫 AAB 업로드 후에야** Play Console → 설정 → 앱 서명에서 확인 가능 | **개발·내부 테스트에서는 지도가 뜨는데 스토어 배포판(프로덕션/공개 테스트)에서만 안 뜬다** |
+
+`~/.android/debug.keystore`는 커밋되는 파일이 아니라 머신마다 첫 빌드 때 자동 생성되므로,
+(a)와 (b)는 서로 다른 값이고 개발자가 늘어나면 계속 추가된다.
+
+(d)가 이 목록에서 제일 위험하다 — Play App Signing을 쓰면 Play가 업로드 키로 받은 AAB를
+자기 앱 서명 키로 **재서명**해서 배포한다. 그래서 사용자가 스토어에서 받는 APK의 서명
+인증서는 (c) 업로드 키가 아니라 (d) Play 앱 서명 키다. (d)를 Maps 키 제한에 안 넣으면
+릴리즈 당일 내부 테스트까지 다 통과해놓고 프로덕션 배포판에서만 지도가 회색으로 뜬다.
+그런데 (d)는 첫 업로드를 해야 값이 생기므로, 릴리즈 당일 순서(아래 7절)에 명시적으로
+넣어두지 않으면 반드시 빠진다.
+
 ## 3. `key.properties` 작성 (릴리즈 서명)
 
 ```bash
@@ -91,6 +118,22 @@ $ANDROID_SDK_ROOT/build-tools/36.0.0/apksigner verify --print-certs /tmp/app_apk
 "끄면 안 보여야 한다" 계약을 지키기 위한 것이었고, SQL 레벨 회귀 테스트는
 `supabase/tests/database/location_sharing_security.test.sql`로 이미 확인했지만
 실기기에서 클라이언트가 그 결과를 제대로 반영해 그리는지는 여기서 처음 확인된다.
+
+4번(지도 타일 실렌더)도 여기가 유일한 확인 지점이다 — CI/샌드박스에는 KVM도 GPU도
+없어 에뮬레이터로 Google Maps GLES 렌더를 검증할 수 없다. 빌드 산출물에 키가 박혔는지
+(2절)까지가 자동으로 확인 가능한 최대치이고, 실제로 타일이 그려지는지는 실기기 스모크
+외에 방법이 없다.
+
+## 7. 첫 AAB 업로드 후 — Play 앱 서명 키 SHA-1 등록 (건너뛰면 프로덕션에서만 지도 깨짐)
+
+Play Console에 AAB를 처음 올리고 나면 → **설정 → 앱 서명**에서 "앱 서명 키 인증서"의
+SHA-1이 생긴다. 이 값을 2-1절 표 (d)로 Google Cloud 콘솔의 Maps 키 제한(Android 앱
+목록)에 추가한다.
+
+이 단계는 스모크(6절)를 통과한 뒤, **프로덕션/공개 테스트 트랙으로 승격하기 전에**
+한다. 내부 테스트 트랙까지는 (c) 업로드 키 서명이 그대로 쓰이는 경우가 있어 지도가
+떠서 "다 됐다"고 착각하기 쉽지만, Play가 재서명해 배포하는 트랙에서는 (d) 없이는
+지도가 회색이다. 릴리즈 당일 이 절을 건너뛰면 출시 후 사용자 신고로 알게 된다.
 
 ## 배포 완료 기준 — 방침 문구와 직결된 항목 (건너뛰지 말 것)
 
