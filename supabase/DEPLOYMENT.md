@@ -4,53 +4,75 @@
 마이그레이션을 적용하고 v0.1 앱 빌드를 연결하는 절차**를 다룬다.
 `supabase/README.md`는 로컬 개발만 다루므로, 운영 배포는 이 문서를 따른다.
 
-> **현재 상태 (2026-09-03):** 이 리포만으로는 운영 Supabase 프로젝트의 존재
-> 여부·설정을 알 수 없다. 아래 "가인님(프로젝트 오너) 확인 필요" 항목이
-> 채워지기 전에는 v0.1을 배포할 수 없다. 추측으로 채우지 말 것.
+> **현재 상태 (2026-09-06):** 운영 프로젝트 확보됨(아래 0장 참고). **운영 DB에
+> 마이그레이션이 하나도 적용돼 있지 않다** — Auth만 살아 있고 스키마는 비어
+> 있다(가인님이 anon key로 확인: `rpc/get_invitation_preview` → PGRST202,
+> `rest/v1/profiles` → 404). 즉 아래 2장의 `supabase db push`를 처음으로
+> 실행해야 v0.1 백엔드가 생긴다. **아직 막혀 있는 것: Supabase 액세스 토큰
+> 또는 DB 비밀번호가 없어서 이 세션/CI에서 `db push`를 실행할 수 없다** —
+> 가인님이 직접 실행하거나 토큰을 제공해야 한다(2장 참고).
 
 ---
 
-## 0. 가인님(프로젝트 오너) 확인 필요 — 미확정 값
+## 0. 운영 프로젝트 값
 
-배포를 실행하기 전에 아래를 확정해 이 문서의 해당 칸을 채운다.
-
-| 항목 | 채워야 하는 것 | 현재 값 |
+| 항목 | 값 | 상태 |
 |---|---|---|
-| (a) 운영 프로젝트 | Supabase 프로젝트가 프로비저닝돼 있는지. 없으면 생성(region 포함) | _미확정_ |
-| (a) project-ref | 프로젝트 API Settings의 Reference ID (`xxxxxxxxxxxxxxxxxxxx`) | _미확정_ |
-| (a) region / plan | 배포 리전, 요금제(Free/Pro) | _미확정_ |
-| (b) 적용된 마이그레이션 | 원격 DB에 지금까지 적용된 마이그레이션 번호(없으면 "없음") | _미확정_ |
-| (c) SUPABASE_URL | `https://<project-ref>.supabase.co` | _미확정_ |
-| (c) SUPABASE_ANON_KEY | 프로젝트 API Settings의 `anon` `public` 키 | _미확정_ |
-| (d) 원격 PG 메이저 버전 | `show server_version;` 결과. `config.toml`은 `major_version = 17` 전제 | _미확정_ |
-| (d) 확장 활성화 상태 | `postgis`, `pgcrypto`, `pg_cron` 활성 여부 (아래 3장) | _미확정_ |
-| (e) service_role 키 보관처 | 스케줄러/관리 작업용. 절대 리포·앱 빌드에 넣지 않음 | _미확정_ |
+| (a) 운영 프로젝트 | 프로비저닝됨 | **확정** (2026-09-06) |
+| (a) project-ref | `cpaxqjqijrawmevzivwz` | **확정** |
+| (a) region | `ap-northeast-2` (서울) | **확정** |
+| (a) plan | — | 미확인(배포에 필수 아님) |
+| (b) 적용된 마이그레이션 | **0개** (스키마 비어 있음, Auth만 동작) | **확정** (2026-09-06, anon key 확인) |
+| (c) SUPABASE_URL | `https://cpaxqjqijrawmevzivwz.supabase.co` | **확정** |
+| (c) SUPABASE_ANON_KEY | 확보됨 — `app/.env`에 있음(gitignore 대상, 리포에 커밋 안 함) | **확정** |
+| (d) 원격 PG 메이저 버전 | — | 미확인. `db push` 전에 `show server_version;`으로 확인 권장(`config.toml`은 `major_version = 17` 전제) |
+| (d) 확장 활성화 상태 | `postgis` / `pgcrypto` / `pg_cron` | 미확인. 3장 참고 — 특히 `pg_cron`은 대시보드에서 먼저 켜는 걸 권장 |
+| (e) service_role 키 보관처 | — | 미정. 스케줄러/관리 작업용, 절대 리포·앱 빌드에 넣지 않음 |
+| **db push 실행 수단** | Supabase 액세스 토큰(`SUPABASE_ACCESS_TOKEN`) **또는** DB 비밀번호 | **없음 — 이게 현재 배포 차단 요소.** 가인님이 직접 실행하거나 제공 필요 |
+| (f) Auth 이메일 확인 | **운영은 이메일 확인 필수** (`auth/v1/settings`의 `mailer_autoconfirm = false`) | **확정** (2026-09-06). 로컬 `config.toml`의 `enable_confirmations = false`와 정반대 — 5장 참고 |
 
 ---
 
 ## 1. 사전 준비 (로컬에서 1회)
 
 ```bash
-# Supabase CLI 로그인 (브라우저 인증)
-supabase login
+# 1) Supabase CLI 로그인 — 둘 중 하나
+supabase login                       # 브라우저 인증 (대화형)
+# 또는 비대화형:
+export SUPABASE_ACCESS_TOKEN=<액세스 토큰>   # 대시보드 Account > Access Tokens에서 발급
 
-# 이 리포를 운영 프로젝트에 연결. <project-ref>는 0장 (a).
-supabase link --project-ref <project-ref>
+# 2) 이 리포를 운영 프로젝트에 연결
+supabase link --project-ref cpaxqjqijrawmevzivwz
+# DB 비밀번호를 물으면 프로젝트 생성 시 설정한 Postgres 비밀번호 입력
+# (대시보드 Project Settings > Database > Database password에서 재설정 가능)
 ```
 
 `supabase link`는 `supabase/.temp/`에 연결 정보를 쓴다(이 디렉터리는 커밋하지
-않는다). DB 비밀번호를 물으면 프로젝트 생성 시 설정한 Postgres 비밀번호를 넣는다.
+않는다).
+
+> **실행 주체:** 이 세션(및 CI)에는 액세스 토큰도 DB 비밀번호도 없다. 아래
+> 명령은 **가인님이 직접 실행**하거나, `SUPABASE_ACCESS_TOKEN`을 안전하게
+> 제공해야 백엔드 담당이 실행할 수 있다.
 
 ---
 
-## 2. 마이그레이션 적용
+## 2. 마이그레이션 적용 (최초 배포 — 현재 원격은 빈 스키마)
 
 ```bash
-# 원격에 적용될 대기 마이그레이션 확인 (실제 적용 안 함)
+# 원격에 적용될 대기 마이그레이션 확인 (실제 적용 안 함, 원격에 연결만)
 supabase db push --dry-run
+# → migrations/*.sql 16개 전부 "pending"으로 떠야 정상 (원격이 비어 있으므로)
 
 # 실제 적용
 supabase db push
+```
+
+원격 PG 메이저 버전이 `config.toml`의 `major_version = 17`과 맞는지는 확인해
+두면 좋다(불일치하면 `db diff`가 오작동할 수 있음). 대시보드 SQL Editor에서
+`show server_version;`, 또는 [3장의 psql 접속 문자열](#cron-job-verify)로:
+
+```bash
+psql "<대시보드 Project Settings > Database의 connection string>" -tAc "show server_version;"
 ```
 
 - `supabase/migrations/*.sql`을 **파일명 순서대로** 원격에 적용하고,
@@ -232,8 +254,9 @@ flutter build apk --release \
   --dart-define=SUPABASE_ANON_KEY=<anon key>
 ```
 
-`app/.env.example`을 복사해 `app/.env`를 만들어 채우는 방식도 가능(`.env`는
-gitignore 대상 — 현재 `.gitignore`에 `.env` 패턴 추가 필요 여부 확인).
+`app/.env.example`을 복사해 `app/.env`를 만들어 채우는 방식도 가능. `app/.env`는
+`app/.gitignore:14`의 `.env` 패턴으로 무시된다(`git check-ignore`로 확인함) —
+운영 URL/anon key는 이미 `app/.env`에 들어가 있고 리포에는 커밋되지 않는다.
 
 ---
 
@@ -242,13 +265,13 @@ gitignore 대상 — 현재 `.gitignore`에 `.env` 패턴 추가 필요 여부 �
 `config.toml`의 `[auth]` 값은 **로컬 스택 전용**이며 운영에는 적용되지 않는다.
 운영 Auth 설정은 대시보드 Authentication에서 직접 맞춘다.
 
-| 항목 | 로컬 `config.toml` 값 | 운영에서 확인할 것 |
+| 항목 | 로컬 `config.toml` 값 | 운영 (확인된 것 / 할 것) |
 |---|---|---|
-| 이메일 확인(`enable_confirmations`) | `false` | v0.1 정책 결정에 따름. **켜면** 앱의 `email_not_confirmed` 안내 카피가 실제로 동작. 끄면 그 분기는 도달 불가(카피는 방어적으로 유지) |
-| 회원가입 허용(`enable_signup`) | `true` | v0.1 공개 범위에 맞게 |
+| 이메일 확인 | `enable_confirmations = false` | **운영은 이메일 확인 필수** — `auth/v1/settings`의 `mailer_autoconfirm = false` (2026-09-06 확인). 로컬과 정반대다. 따라서 앱의 `email_not_confirmed` 안내 카피 분기는 운영에서 **실제로 도달하는 경로**이므로 반드시 유지(P0-8 결정과 일치). 미확인 계정으로 로그인 시도하면 GoTrue가 이 에러를 던진다 |
+| 회원가입 허용(`enable_signup`) | `true` | v0.1 공개 범위에 맞게 대시보드에서 확인 |
 | 최소 비밀번호 길이 | `6` | 필요 시 상향 |
 | 계정 열거 보호 | (config.toml에 항목 없음) | 대시보드에 해당 토글이 있으면 상태 확인. `config.toml`로는 관리 불가 |
-| SMTP | 로컬 캡처 서버 | 운영 SMTP(SendGrid 등) 설정 필요 — 비밀번호 재설정/이메일 확인 메일 발송에 필수 |
+| SMTP | 로컬 캡처 서버 | **운영 SMTP 설정 필수** — 이메일 확인이 켜져 있으므로 가입 확인 메일이 실제로 나가야 신규 가입이 완료된다. SMTP 미설정이면 아무도 가입을 못 끝낸다 |
 
 ---
 
@@ -269,8 +292,13 @@ gitignore 대상 — 현재 `.gitignore`에 `.env` 패턴 추가 필요 여부 �
 
 ## 7. 배포 완료 기준 (전부 충족해야 v0.1 백엔드 배포 완료)
 
-- [ ] 0장 미확정 값(a~e)이 전부 채워졌다.
-- [ ] `supabase db push` 성공 + `supabase db diff --linked` 출력 비어 있음.
+- [x] 운영 프로젝트 확보 — ref `cpaxqjqijrawmevzivwz`, region `ap-northeast-2`,
+  URL/anon key 확보(`app/.env`). (2026-09-06)
+- [ ] **`db push` 실행 수단 확보** — 액세스 토큰 또는 DB 비밀번호. 현재 없음
+  → 가인님이 직접 실행하거나 토큰 제공(0장 참고).
+- [ ] 0장 나머지 미확인 값: (d) 원격 PG 버전·확장 상태, (e) service_role 키 보관처.
+- [ ] `supabase db push` 성공(최초 적용 — 16개 전부) + `supabase db diff --linked`
+  출력 비어 있음.
 - [ ] 보안 회귀 테스트 3종이 원격 DB 대상으로 PASS.
 - [ ] **정리 경로가 살아 있다 (둘 중 하나) — `docs/legal/privacy.html`의
   "위치 이력 최대 14일 보관" 약속이 실제로 지켜지는지가 이 항목 하나에
