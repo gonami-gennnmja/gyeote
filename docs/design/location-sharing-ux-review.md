@@ -1196,7 +1196,7 @@ P0-8 티켓(위 576행~)의 4개 경로 + `_friendlyAcceptError` 흡수에 필�
 
 | 매칭 키 (소문자 부분일치, 나열된 것 중 아무거나) | 확정 카피 | 화면 |
 |---|---|---|
-| `email not confirmed` · `email_not_confirmed` | `아직 메일 인증이 안 끝났어요. 가입할 때 보내드린 메일에서 인증 링크를 눌러주세요.` (현재 로컬 config `enable_confirmations=false` 기준 도달 불가, 운영 설정 미확인 — 아래 메모) | login |
+| `email not confirmed` · `email_not_confirmed` | `아직 메일 인증이 안 끝났어요. 가입할 때 보내드린 메일에서 인증 링크를 눌러주세요.` (운영 이메일 확인 필수 확정 2026-09-06 → 실제 도달 가능, 정상 경로 — 아래 메모) | login |
 | `invalid login credentials` · `invalid_credentials` | `이메일 또는 비밀번호가 올바르지 않아요.` | login |
 | `user_banned` · `user is banned` | `로그인할 수 없는 계정이에요. 도움이 필요하면 문의해주세요.` | login |
 | `already registered` · `been registered` · `user_already_exists` · `email_exists` | `이미 가입된 이메일이에요. 로그인해주세요.` | signup |
@@ -1229,31 +1229,78 @@ P0-8 티켓(위 576행~)의 4개 경로 + `_friendlyAcceptError` 흡수에 필�
 
 - `'연결 상태가 좋지 않아요. 인터넷 연결을 확인하고 다시 시도해주세요.'`
 
-**`email_not_confirmed` 도달 가능성 메모 (Dexa 조사 + 가인님 결정, 2026-09-02)**
+**`email_not_confirmed` 도달 가능성 메모 (운영 확인 완료, 2026-09-06)**
 
-> **현재 로컬 config 기준(`enable_confirmations=false`) 도달 불가, 운영 설정
-> 미확인.**
+> **운영 확인 결과 이메일 확인 필수 — `email_not_confirmed` 실제 도달 가능
+> (2026-09-06 확인).** 가인님이 운영 Supabase의 `auth/v1/settings`를 직접
+> 확인한 결과 `mailer_autoconfirm = false`다. 로컬 `config.toml`
+> (`enable_confirmations = false`)과 **정반대**이며, 운영이 기준이다.
 
-Dexa 조사 결과:
-- `supabase/config.toml:226` `[auth.email] enable_confirmations = false`,
-  SMTP 블록 전부 주석(로컬 캡처 전용). 이 설정에서 GoTrue는 신규 가입을 즉시
-  autoconfirm하므로, 비밀번호 로그인 경로의 `email_not_confirmed`는 "확인
-  요구 ON + 미확인 계정"에서만 나오고 **정상 가입 흐름에서는 도달하지
-  않는다**(config 값 + 문서화된 GoTrue 동작에 근거한 추론 — GoTrue 내부 로직은
-  리포에 없어 100% 단정은 아님).
-- 계정 열거 보호 설정은 `config.toml`에 항목 자체가 없다(로컬 CLI 스키마
-  미지원). rate limit(`sign_in_sign_ups` 30회/5분)만 완화 요소.
-- `config.toml`은 `npx supabase start` 로컬 전용이다. **운영 Auth 설정(이메일
-  확인 ON/OFF, 열거 보호)은 리포로 알 수 없고 대시보드 확인 사항.**
+경과:
+- (2026-09-02, Dexa) 로컬 `config.toml:226` `enable_confirmations = false`,
+  SMTP 주석 → 로컬에서는 즉시 autoconfirm이라 정상 가입 흐름에서 도달 불가.
+  운영 설정은 리포로 알 수 없어 "미확인"으로 남겨뒀었다.
+- (2026-09-06, 가인님) 운영 `auth/v1/settings` 직접 확인 →
+  `mailer_autoconfirm = false`. **운영은 이메일 확인이 필수**이고, 회원가입
+  직후 미인증 상태로 로그인을 시도하면 `email_not_confirmed`가 실제로 온다.
 
-가인님 결정: **이 분기는 살려둔다.** 운영 설정을 리포로 알 수 없고 나중에
-이메일 확인을 켤 여지가 있어, 지금 지우면 그때 다시 만들어야 한다. 확인
-메일을 켜는 순간 이 문구는 "가입됐으나 미인증"을 드러내는 열거 단서가 되므로,
-그 시점에는 문구를 뭉뚱그리는 게 아니라 Supabase Auth 대시보드의 확인 메일 +
-열거 보호(leaked-enumeration protection)로 서버 레벨에서 막는다.
+결론: **분기를 살려두자던 판단(2026-09-02)이 맞았다.** 이 행 그대로 유지.
+`email_not_confirmed` 문구는 v0.1에서 **예외 경로가 아니라 정상 경로**의
+일부다(모든 신규 사용자가 인증 전 로그인 시도 시 마주칠 수 있다). 열거 단서
+성격은 여전하지만 정당한 사용자에게 필요한 안내이므로 노출 유지 —
+열거 방어는 Supabase Auth 대시보드의 leaked-enumeration protection으로
+서버 레벨에서 거는 게 맞다(Dexa/가인님 영역).
 
 **`invalid_credentials`를 절대 구분하지 않는 것**(이메일 없음 vs 비밀번호
-틀림)은 위 config 상태와 무관하게 확정이다.
+틀림)은 위와 무관하게 확정이다.
+
+---
+
+### 회원가입 후 이메일 확인 안내 — 스낵바 → 화면 지속 안내로 전환 (Din, 2026-09-06)
+
+**배경**: 운영이 이메일 확인 필수(`mailer_autoconfirm = false`)로 확정되면서,
+`signup_screen.dart`의 `response.session == null` 분기가 **v0.1의 실제 기본
+경로**가 됐다(기존 코드 주석의 "가정"이 확정된 것). 현재 처리:
+
+```
+ScaffoldMessenger.showSnackBar('가입 확인 이메일을 보냈어요. 메일을 확인한 뒤 로그인해주세요.')
+Navigator.pop()   // 곧바로 로그인 화면으로
+```
+
+**문제**: 스낵바는 ~4초 뒤 사라지는데, 사용자가 해야 할 다음 행동은 "앱을
+나가서 메일함으로 가기"다. 안내가 사라진 뒤 로그인 화면에 남겨지고, 바로
+로그인을 시도하면 `email_not_confirmed` 인라인 에러(위 표 문구)를 만나 막힌
+느낌을 받는다. 안내의 **지속성**이 그 비중에 안 맞는다.
+
+**개선안 (v0.1 — 새 라우트 없이 `signup_screen` 안에서 상태 전환)**:
+`response.session == null`이면 스낵바+pop 대신 `setState`로 완료 상태
+(`_signupDone = true`, 입력한 이메일 보관)로 바꾸고, `build()`에서 폼 대신
+아래 확인 패널을 보여준다. 화면에 계속 남으므로 사용자가 메일을 확인하고
+돌아올 시간이 있다.
+
+| 요소 | 내용 |
+|---|---|
+| 아이콘 | `Icons.mark_email_unread_outlined`, size 64, `colorScheme.primary` |
+| 제목 | `가입 확인 메일을 보냈어요` (titleMedium) |
+| 본문 | `{입력한 이메일} 주소로 인증 링크를 보냈어요.\n메일 속 링크를 누르면 가입이 완료돼요. 그다음 이 화면에서 로그인해주세요.` |
+| 보조(스팸) | `메일이 안 보이면 스팸함도 확인해주세요.` (bodySmall, `onSurfaceVariant`) |
+| 기본 버튼 | `로그인하러 가기` → `Navigator.pop()` (로그인 화면으로) |
+| 보조 버튼(권장, 빼도 무방) | `메일 다시 보내기` (TextButton) — 아래 참고 |
+
+- AppBar: 완료 상태에서는 `automaticallyImplyLeading: false`, 제목 `가입 확인`.
+  반쯤 채운 폼으로 되돌아가는 뒤로가기를 막고 명시적 버튼만 남긴다.
+- 톤: 전부 해요체(189ae2c 기준). 버튼 라벨은 동사라 예외 유지.
+
+**`메일 다시 보내기` (선택)**: `AuthRepository`에
+`resendSignupConfirmation(email)` 추가 →
+`_auth.resend(type: OtpType.signup, email: email)`. 연타 방지로 전송 후
+60초 비활성 + `over_email_send_rate_limit` 시 기존 화이트리스트 문구
+(`인증 메일을 너무 자주 보냈어요. 잠시 후 다시 시도해주세요.`) 재사용.
+구현 부담이 있으면 **v0.2로 미뤄도 된다** — 핵심은 위 "화면 지속 안내".
+
+**로그인 화면 쪽**: 되돌아온 사용자가 `email_not_confirmed`를 만나는 경로는
+P0-8 문구(`아직 메일 인증이 안 끝났어요…`)로 이미 처리됨. `메일 다시 보내기`를
+구현하면 이 인라인 에러 아래에도 같은 액션을 노출하면 좋다(선택).
 
 ---
 
