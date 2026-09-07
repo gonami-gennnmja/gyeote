@@ -57,31 +57,50 @@ Android 서명 SHA-1 은 `app/RELEASE_RUNBOOK.md` 2-1절 참고(4종 다 등록)
 
 ---
 
-## 2. Apple Developer 계정 대기 항목 (오늘 결제 → 전파 중)
+## 2. 블로커 현황
 
 iOS 워크플로가 **실제로 성공하려면 두 가지 블로커가 각각 풀려야 한다.** 둘은
-별개다.
+별개다. 2026-09-07 기준 **블로커 A 해소, 블로커 B 대기**(Apple Developer 결제 →
+전파 중). 지금 첫 빌드를 돌리면 강등 모드(no-codesign)로 A 까지 검증된다.
 
-### 블로커 A — iOS Xcode 스캐폴드 (담당: Diana, 계정과 무관)
+### 블로커 A — iOS Xcode 스캐폴드 — ✅ 해소됨 (2026-09-07, 커밋 `34e0e8f` + `cf375b1`)
 
-지금 `app/ios/` 에는 `Podfile`, `Runner/AppDelegate.swift`, `Runner/Info.plist`,
-`Flutter/Maps.xcconfig.example` 만 있고 **`Runner.xcodeproj` / `Runner.xcworkspace`
-가 없다.** 이게 없으면 `flutter build ios` 가 프로젝트를 못 찾아 즉시 실패한다
-(`codemagic.yaml` 의 CocoaPods 스텝이 이걸 감지해 명시적으로 멈춘다).
+`flutter create --platforms=ios` 로 스캐폴드가 들어왔다. QA 가 Linux 에서 확인
+가능한 범위까지 사전 점검한 결과(맥이 없어 컴파일 자체는 Codemagic 첫 실행에서
+검증):
 
-Diana 의 스캐폴드에 포함돼야 할 것:
-- `Runner.xcodeproj` (+ `project.pbxproj`), `Runner.xcworkspace`
-- `ios/Flutter/Debug.xcconfig` / `Release.xcconfig` — 각각 `#include "Generated.xcconfig"`
-  **와 `#include "Maps.xcconfig"`**. 후자가 있어야 `Info.plist` 의
-  `$(MAPS_API_KEY)` 가 치환된다(`Maps.xcconfig.example` 주석 참고)
-- `Runner/Base.lproj/LaunchScreen.storyboard`, `Main.storyboard`
-- `Runner/Assets.xcassets` (앱 아이콘 — Din 소스에서 생성)
-- `Runner/Runner-Bridging-Header.h` (필요 시)
+| 항목 | 상태 |
+|---|---|
+| `Runner.xcodeproj` / `Runner.xcworkspace` | 있음 |
+| `Debug.xcconfig` / `Release.xcconfig` | `#include "Generated.xcconfig"` + `#include? "Maps.xcconfig"` (옵셔널 include — Maps.xcconfig 없어도 빌드 통과, 지도만 회색) |
+| `Info.plist` | `MapsApiKey = $(MAPS_API_KEY)`, `NSLocationWhenInUseUsageDescription`(한글), `UIApplicationSceneManifest`. `NSLocationAlwaysAndWhenInUseUsageDescription` 없음(의도) |
+| `AppDelegate.swift` | 3.47 새 템플릿(`FlutterImplicitEngineDelegate`) + `GMSServices.provideAPIKey` 블록. `mapsApiKey != "$(MAPS_API_KEY)"` 미치환 가드 있음 |
+| pbxproj 번들 ID | `com.gyeote.app` (RunnerTests 는 `com.gyeote.app.RunnerTests`) — Android `applicationId` 와 일치 |
+| pbxproj 배포 타겟 | `IPHONEOS_DEPLOYMENT_TARGET = 15.0`, `Podfile` `platform :ios, '15.0'` — 일치 (현행 GoogleMaps SDK 요구치) |
+| `AppIcon.appiconset` | 전 사이즈 + `Contents.json` (알파 제거된 iOS 세트) |
+| `pubspec.lock` | `meta 1.18.3` / `vector_math 2.4.0` 으로 정정됨 — Flutter 3.47.1 SDK 고정값과 일치. `flutter pub get` 재실행해도 lock 안 바뀜(고정 안정) |
+| `flutter analyze` / `flutter test` | 7 issues·0 error / **98/98 통과** (Linux 에서 확인) |
 
-**블로커 A 만 풀리면**(계정 없이도) Codemagic iOS 워크플로가 `flutter build ios
---release --no-codesign` 까지 통과한다 — Swift 컴파일, 팟 링크, GoogleMaps SDK
-링크, Info.plist·xcconfig 배선, 에셋 카탈로그가 전부 검증된다. 아카이브 직전
-단계까지가 여기서 확인 가능한 최대치다.
+**아직 검증 못 한 것(= Codemagic 첫 실행이 확인해야 할 것):** Swift 컴파일,
+`pod install` (GoogleMaps SDK 해석), GoogleMaps SDK **링크**, `Info.plist` 의
+`$(MAPS_API_KEY)` 치환이 실제 빌드 산출물에 반영되는지, 에셋 카탈로그 컴파일.
+이건 맥이 필요해 QA 환경에서 못 하고, 아래 5절대로 가인님이 Codemagic 을
+연결해 첫 빌드를 돌려야 나온다.
+
+**캐시로 인한 옛 lock 물림 걱정 없음:** 현재 `codemagic.yaml` 은 의존성
+캐시(`cache:` 블록)를 켜지 않았다. 그래서 매 빌드가 완전 콜드이고 `flutter pub
+get` / `pod install` 이 항상 커밋된 `pubspec.lock` / `Podfile.lock` 기준으로
+새로 푼다. 나중에 캐시를 켜면 캐시 키에 lock 해시를 포함시켜야 한다.
+
+### pbxproj 서명 설정 — 계정 연동 시 손봐야 할 것
+
+pbxproj 는 `CODE_SIGN_STYLE = Automatic`, `CODE_SIGN_IDENTITY[sdk=iphoneos*] =
+"iPhone Developer"` 인데 **`DEVELOPMENT_TEAM` 이 비어 있다.** `--no-codesign`
+빌드는 xcodebuild 에 `CODE_SIGNING_ALLOWED=NO` 를 넘겨 이걸 우회하므로 강등
+모드에는 문제없다. 계정 연동 후 서명 빌드에서는 `codemagic.yaml` 의
+`xcode-project use-profiles` 가 프로파일·팀을 프로젝트에 주입하므로 pbxproj 를
+직접 고칠 필요는 없지만, 안 되면 `DEVELOPMENT_TEAM` 을 Codemagic 환경변수로
+넣거나 pbxproj 에 박는 걸 검토한다(블로커 B 처리 시).
 
 ### 블로커 B — 서명·배포 (계정 연동 필요)
 
@@ -118,6 +137,11 @@ Android `applicationId` 와 일치하는지 확인(일치함), Info.plist 의 �
 → **평균 20분/빌드로 잡으면 500분 ≈ 월 25회.** 콜드 빌드·재시도 감안하면
 **실사용 20회 안팎(대략 1.5일에 1회)**. 매 커밋마다 도는 건 불가능하고 불필요.
 
+> ⚠️ 위 표는 **추정치**다(맥이 없어 QA 가 실측 못 함). 첫 Codemagic 실행이
+> 콜드 빌드이므로, 그 빌드의 실제 소요 시간(Codemagic UI 의 각 스텝 duration)을
+> 이 표에 반영해 예산 계획을 교정한다 — 특히 `flutter build` 스텝과 `pod
+> install` 스텝. 첫 빌드 결과가 나오면 이 표를 실측으로 대체할 것.
+
 ### 트리거 조건 (매 커밋 금지)
 
 `codemagic.yaml` 에 이미 반영:
@@ -150,13 +174,40 @@ Android 예비 워크플로(`android-appbundle`)는 자동 트리거가 없어 �
 
 ---
 
-## 4. Diana 스캐폴드가 들어오면 (Tom 후속 작업)
+## 4. 강등 모드(no-codesign) 첫 빌드에서 확인할 것
 
-블로커 A 해소되면 QA 가 실제로 붙여볼 것:
-1. 로컬에서 `flutter build ios --release --no-codesign` 이 되는지 (맥 없으면
-   불가 — 그 경우 Codemagic 수동 빌드로 확인)
-2. `codemagic.yaml` 의 CocoaPods 감지 스텝이 통과하는지
-3. `Maps.xcconfig` → `Info.plist` `$(MAPS_API_KEY)` → 빌드 산출물의
-   `MapsApiKey` 값이 실제 키로 치환됐는지 (Android 에서 `aapt2` 로 했던 것과
-   동일한 검증을 `.app/Info.plist` 에 대해)
-4. 그 결과로 이 문서 2절 블로커 A 를 "해소"로 갱신
+블로커 A 는 해소됐고 블로커 B(Apple 계정)는 아직이므로, 첫 빌드 목표는
+**강등 모드 통과**다. Codemagic 실행 후 로그·산출물에서 확인:
+
+1. CocoaPods 스텝: `ios/Runner.xcodeproj` 감지 통과 → `pod install` 이 GoogleMaps
+   관련 팟(`GoogleMaps`, `Google-Maps-iOS-Utils` 등)을 해석하는지
+2. 빌드 스텝: `APP_STORE_CONNECT_PRIVATE_KEY` 가 없으니 `flutter build ios
+   --release --no-codesign` 분기로 들어가 **Swift 컴파일 + GoogleMaps SDK 링크**
+   가 통과하는지 (링크 실패가 이 단계의 가장 흔한 사고)
+3. 산출물 `build/ios/iphoneos/Runner.app` 이 나오는지, 그 안 `Info.plist` 의
+   `MapsApiKey` 가 `$(MAPS_API_KEY)` 그대로가 아니라 실제 키로 치환됐는지
+   (Android 에서 `aapt2` 로 했던 검증의 iOS 판 — `plutil -p Runner.app/Info.plist`)
+4. `flutter analyze` / `flutter test` 게이트가 맥 러너에서도 통과하는지
+5. **각 스텝 소요 시간을 3절 표에 실측으로 반영**
+
+이게 다 통과하면 남은 건 블로커 B(서명 인증서·프로파일·IPA export·TestFlight)
+뿐이고, 계정만 붙으면 `codemagic.yaml` 이 자동으로 서명 분기로 넘어간다.
+
+---
+
+## 5. 첫 Codemagic 빌드 트리거 (가인님 — QA 는 계정·연결 권한 없음)
+
+QA 세션에는 Codemagic 계정도 저장소 연결 권한도 없고 맥도 없어서, 아래는
+가인님이 직접 한다.
+
+1. **저장소 연결**: codemagic.io 로그인 → Add application → 이 저장소 선택 →
+   "codemagic.yaml" 설정 방식 선택 (UI 워크플로 편집기 아님)
+2. **환경변수 그룹 3개 생성** (1절 표대로). 지금 당장은 `gyeote_shared` +
+   `gyeote_ios` 의 `MAPS_API_KEY_IOS` 까지만 있으면 강등 모드가 돈다.
+   App Store Connect 3개 변수는 비워둔다 → 스크립트가 알아서 no-codesign 으로 감
+3. **첫 빌드 실행**: 두 방법 중 하나
+   - `git tag v0.1.0-rc0 && git push origin v0.1.0-rc0` → `ios-testflight` 자동 실행
+   - 또는 Codemagic UI 에서 `ios-testflight` 워크플로 "Start new build" (브랜치 지정)
+4. **결과 공유**: 빌드 성공/실패 + 각 스텝 duration 을 QA 에게 → 4절 검증 항목
+   대조 + 3절 표 실측 교정
+5. 강등 모드 통과 확인되면, 계정 전파 완료 후 블로커 B(2절) 진행
