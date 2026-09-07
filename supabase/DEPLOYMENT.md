@@ -4,13 +4,14 @@
 마이그레이션을 적용하고 v0.1 앱 빌드를 연결하는 절차**를 다룬다.
 `supabase/README.md`는 로컬 개발만 다루므로, 운영 배포는 이 문서를 따른다.
 
-> **현재 상태 (2026-09-06):** 운영 프로젝트 확보됨(아래 0장 참고). **운영 DB에
+> **현재 상태 (2026-09-07):** 운영 프로젝트 확보됨(아래 0장 참고). **운영 DB에
 > 마이그레이션이 하나도 적용돼 있지 않다** — Auth만 살아 있고 스키마는 비어
 > 있다(가인님이 anon key로 확인: `rpc/get_invitation_preview` → PGRST202,
-> `rest/v1/profiles` → 404). 즉 아래 2장의 `supabase db push`를 처음으로
-> 실행해야 v0.1 백엔드가 생긴다. **아직 막혀 있는 것: Supabase 액세스 토큰
-> 또는 DB 비밀번호가 없어서 이 세션/CI에서 `db push`를 실행할 수 없다** —
-> 가인님이 직접 실행하거나 토큰을 제공해야 한다(2장 참고).
+> `rest/v1/profiles` → 404). 초기 스키마를 적용하는 방법은 두 가지 —
+> **경로 A**(`supabase db push`, CLI + 액세스 토큰/DB 비밀번호 필요, 아직 없음)
+> 또는 **경로 B**(대시보드 SQL Editor에 `supabase/bundle/v0.1_initial.sql`
+> 붙여넣기, CLI·토큰 불필요). CLI 세팅이 부담이거나 심사가 급하면 경로 B로
+> 지금 바로 적용 가능하다. "배포 경로 선택" 절 참고.
 
 ---
 
@@ -33,7 +34,32 @@
 
 ---
 
-## 1. 사전 준비 (로컬에서 1회)
+## 배포 경로 선택 — A(CLI) vs B(SQL Editor)
+
+마이그레이션을 운영에 적용하는 방법은 두 가지다. **결과는 동일**하고(같은 16개
+마이그레이션 + 원장 기록), 이후 CLI 운영도 둘 다 정상이다.
+
+| | 경로 A — `supabase db push` | 경로 B — 대시보드 SQL Editor 번들 |
+|---|---|---|
+| 필요한 것 | Supabase CLI 설치 + 액세스 토큰(또는 DB 비밀번호) | 대시보드 로그인만 |
+| 방법 | 1~2장 | 2-B장 (`supabase/bundle/v0.1_initial.sql` 붙여넣기) |
+| 증분 적용 | 됨 (이후 마이그레이션은 원장 비교로 자동) | 첫 적용만. 이후 마이그레이션은 경로 A 또는 새 번들 |
+| 실패 시 | 마이그레이션 단위로 멈춤, 그 파일만 고치고 재푸시 | 전체가 한 트랜잭션 → 전부 롤백, 고치고 재실행 |
+| 원장 | CLI가 자동 기록 | 번들 맨 끝 INSERT 블록이 기록 (지우지 말 것) |
+
+**언제 무엇을:**
+- **CLI가 이미 있고 토큰을 만들 수 있으면 → 경로 A.** 앞으로 v0.2~v0.4
+  마이그레이션도 계속 나오므로, 한 번 세팅해두면 이후가 편하다.
+- **지금 당장 CLI 설치·토큰 발급이 부담이거나, 심사 마감이 급하면 → 경로 B.**
+  대시보드에서 붙여넣기 한 번이면 끝난다. 단 다음 마이그레이션 때는 경로 A로
+  넘어가거나(원장이 이미 채워져 있어 자연스럽게 이어진다) 갱신된 번들을 다시
+  붙여넣어야 한다.
+- 경로 B로 적용한 뒤 나중에 경로 A로 전환해도 안전하다 — 번들이 원장에 16개를
+  기록해두므로 `db push`가 그걸 "이미 적용됨"으로 인식하고 건너뛴다.
+
+---
+
+## 1. (경로 A) 사전 준비 — 로컬에서 1회
 
 ```bash
 # 1) Supabase CLI 로그인 — 둘 중 하나
@@ -56,7 +82,7 @@ supabase link --project-ref cpaxqjqijrawmevzivwz
 
 ---
 
-## 2. 마이그레이션 적용 (최초 배포 — 현재 원격은 빈 스키마)
+## 2. (경로 A) 마이그레이션 적용 — CLI (최초 배포, 현재 원격은 빈 스키마)
 
 ```bash
 # 원격에 적용될 대기 마이그레이션 확인 (실제 적용 안 함, 원격에 연결만)
@@ -121,32 +147,71 @@ QA가 로컬 `gyeote_test`(순수 PG14)에서 마이그레이션을 검증할 �
 > 대시보드에서 프로젝트 DB를 리셋하고 처음부터 다시 push해도 된다 — 단
 > Auth에 이미 만든 계정이 있으면 사라지니 확인.
 
-### 적용 후 검증 (아래 3개 모두 통과해야 "마이그레이션 적용 완료")
+---
 
-```bash
-# 원격 스키마가 로컬 마이그레이션과 어긋나지 않는지
-supabase db diff --linked   # 출력이 비어 있어야 정상
+## 2-B. (경로 B) 마이그레이션 적용 — 대시보드 SQL Editor 번들
 
-# 보안 회귀 테스트 (로컬에서 원격 DB URL 대상으로)
-#   supabase/tests/database/location_sharing_security.test.sql
-#   supabase/tests/database/location_sharing.test.sql
-#   supabase/tests/database/invitation_email_check.test.sql
-```
+CLI 없이, 대시보드 붙여넣기 한 번으로 초기 스키마를 적용한다.
 
-1. `supabase db push`가 에러 없이 끝났다.
-2. `supabase db diff --linked` 출력이 비어 있다.
-3. **pg_cron 정리 잡이 실제로 등록됐다.** 운영 DB에서 아래를 조회했을 때
-   **정확히 1행이 나오고 그 행의 `active` 가 `true`** 여야 한다:
-   ```sql
-   select jobid, jobname, schedule, command, active
-     from cron.job
-    where jobname = 'gyeote-location-history-retention';
-   ```
-   `db push` 성공만으로는 이게 보장되지 않는다 — pg_cron이 미활성이면
-   (검증 안 됐지만) 마이그레이션이 조용히 성공하고 잡만 없거나, `db push`
-   자체가 실패할 수 있다. 어느 쪽이든 이 쿼리로 확인한다. 행이 0개거나
-   `active = false`면 마이그레이션 적용은 미완료로 간주한다. 원격에 SQL을
-   실행하는 구체적 방법과 조치는 [3장 "잡 등록 확인"](#cron-job-verify) 참고.
+**파일:** `supabase/bundle/v0.1_initial.sql`
+(`supabase/bundle/build.sh` 가 `migrations/*.sql` 16개를 파일명 순서로 결합해
+생성. 마이그레이션이 바뀌면 `bash supabase/bundle/build.sh` 로 다시 만든다.)
+
+### 순서
+
+1. **먼저 `pg_cron` 을 활성화한다** — 대시보드 Database > Extensions > `pg_cron`
+   토글 ON. (번들의 마지막 마이그레이션이 `create extension pg_cron` 을 하는데,
+   pg_cron 이 preload 안 돼 있으면 그 구문이 하드 에러 → 번들 전체가 한
+   트랜잭션이라 16개 전부 롤백된다. `pgcrypto`/`postgis` 는 번들이 알아서
+   처리하므로 조작 불필요.)
+2. 대시보드 **SQL Editor > New query** > `v0.1_initial.sql` **전체** 붙여넣기 >
+   **Run**.
+3. 에러 없이 끝나면 완료. 번들 맨 끝의 `begin; … commit;` 안에서 스키마 16개 +
+   `supabase_migrations.schema_migrations` 원장 기록까지 원자적으로 반영된다.
+4. 아래 "경로 공통 — 적용 후 검증" 으로 넘어간다.
+
+### 실패했을 때
+
+- 번들은 `begin; … commit;` 로 감싸여 있어 **어느 한 구문이라도 실패하면 전부
+  롤백**된다(DB는 원상태). 부분 적용 상태가 남지 않는다.
+- 실패 지점 바로 위의 `-- >>> FILE k/16: <파일명>` 주석이 **어느 원본
+  마이그레이션에서 멈췄는지** 알려준다.
+- 원인을 그 원본 파일(`supabase/migrations/…`)에서 고치고 → `build.sh` 재실행
+  → 번들 재실행.
+- **`20260903090001` (FILE 16/16) 에서만 막힌다면** (대개 pg_cron): 그 FILE 16
+  구간과 맨 끝 원장 INSERT 의 `('20260903090001', …)` 줄만 빼고 Run → 대시보드
+  에서 pg_cron 활성화 → 뺐던 두 조각만 따로 Run.
+
+> ⚠️ **번들 맨 끝 `schema_migrations` INSERT 블록을 지우고 실행하지 말 것.**
+> SQL Editor 수동 적용은 원장을 안 남기므로, 이 블록이 없으면 나중에
+> `supabase db push` 가 16개를 **처음부터 다시** 적용하려 든다(다음 마이그레이션
+> 때 사고). 이 블록이 16개 버전을 원장에 기록해 두면 경로 B 이후에도 CLI 운영이
+> 정상이다.
+
+### 경로 B 이후 다음 마이그레이션(v0.2~)
+
+원장이 채워져 있으므로 그때는 **경로 A(`supabase db push`)로 자연스럽게 이어
+가면 된다** — 원장에 없는 새 버전만 적용된다. 계속 CLI 없이 가려면
+`build.sh` 로 새 번들을 만들어 같은 방식으로 붙여넣는다(단 그 번들의 원장
+INSERT 는 새로 추가된 마이그레이션 버전만 넣도록 조정 필요).
+
+---
+
+## 적용 후 검증 (경로 A·B 공통 — 아래 3개 모두 통과해야 "적용 완료")
+
+- (경로 A) `supabase db diff --linked` 출력이 비어 있다.
+- (경로 B) 아래 스모크 쿼리로 스키마가 실제로 생겼는지 확인:
+  ```sql
+  select count(*) from information_schema.tables where table_schema = 'public';  -- 7
+  select count(*) from pg_policies where schemaname = 'public';                   -- 12 이상
+  select version from supabase_migrations.schema_migrations order by version;     -- 16행
+  ```
+- **보안 회귀 테스트 3종**을 원격 DB 대상으로 실행:
+  `supabase/tests/database/location_sharing_security.test.sql`,
+  `location_sharing.test.sql`, `invitation_email_check.test.sql`
+- **pg_cron 정리 잡 등록 확인** — [3장 "잡 등록 확인"](#cron-job-verify) 게이트.
+  `db push`/번들 "성공" 과 별개로 `cron.job` 에 행이 실제로 있는지 직접 조회한다
+  (`docs/legal/privacy.html` 의 14일 보관 약속이 이 확인에 걸려 있다).
 
 ---
 
@@ -331,11 +396,13 @@ flutter build apk --release \
 
 - [x] 운영 프로젝트 확보 — ref `cpaxqjqijrawmevzivwz`, region `ap-northeast-2`,
   URL/anon key 확보(`app/.env`). (2026-09-06)
-- [ ] **`db push` 실행 수단 확보** — 액세스 토큰 또는 DB 비밀번호. 현재 없음
-  → 가인님이 직접 실행하거나 토큰 제공(0장 참고).
+- [ ] 마이그레이션 16개 적용 — **경로 A**(`supabase db push`, 액세스 토큰/DB
+  비밀번호 필요 — 현재 없음, 가인님이 직접 실행하거나 토큰 제공) **또는
+  경로 B**(대시보드 SQL Editor에 `supabase/bundle/v0.1_initial.sql` 붙여넣기,
+  CLI·토큰 불필요). "배포 경로 선택" 표 참고.
 - [ ] 0장 나머지 미확인 값: (d) 원격 PG 버전·확장 상태, (e) service_role 키 보관처.
-- [ ] `supabase db push` 성공(최초 적용 — 16개 전부) + `supabase db diff --linked`
-  출력 비어 있음.
+- [ ] 적용 후 검증 통과 — 경로 A는 `db diff --linked` 비어 있음 / 경로 B는
+  스모크 쿼리(public 테이블 7, 원장 16행). 둘 다 `schema_migrations` 16행 확인.
 - [ ] 보안 회귀 테스트 3종이 원격 DB 대상으로 PASS.
 - [ ] **정리 경로가 살아 있다 (둘 중 하나) — `docs/legal/privacy.html`의
   "위치 이력 최대 14일 보관" 약속이 실제로 지켜지는지가 이 항목 하나에
