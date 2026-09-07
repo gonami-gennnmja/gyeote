@@ -1,5 +1,12 @@
-# google_maps_flutter(iOS)가 의존하는 GoogleMaps / Google-Maps-iOS-Utils
-# CocoaPod와 Runner.xcodeproj의 IPHONEOS_DEPLOYMENT_TARGET(15.0)에 맞춘다.
+# [제품 결정 2026-09-07] 지원 최소 버전을 iOS 15로 잡는다 = iOS 14 이하 기기
+# (iPhone 6s~7, 1세대 SE 등) 미지원. 무엇이 요구했나:
+#   1) Flutter 3.47.1 이 flutter create 시 Runner.xcodeproj 의
+#      IPHONEOS_DEPLOYMENT_TARGET 을 15.0 으로 잡는다(Flutter 가 iOS 12~14
+#      지원을 끊음). Podfile 은 그 pbxproj 값과 맞춘다.
+#   2) google_maps_flutter_ios 가 끌어오는 GoogleMaps(<11) / Google-Maps-iOS-Utils
+#      (<7) 팟 체인도 최신 조합이 iOS 15~16 을 요구하는 방향이라 14 로 낮춰도
+#      실익이 없다.
+# 낮추려면 위 둘을 동시에 눌러야 한다(Flutter 다운그레이드 + 지도 팟 핀 고정).
 platform :ios, '15.0'
 
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
