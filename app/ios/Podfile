@@ -1,7 +1,8 @@
-# 13.0 -> 14.0: google_maps_flutter(iOS)가 의존하는 최신 Google-Maps-iOS-Utils/
-# GoogleMaps CocoaPod가 iOS 14 이상을 요구한다(위치 공유 지도 화면 추가에 따른 변경).
-platform :ios, '14.0'
+# google_maps_flutter(iOS)가 의존하는 GoogleMaps / Google-Maps-iOS-Utils
+# CocoaPod와 Runner.xcodeproj의 IPHONEOS_DEPLOYMENT_TARGET(15.0)에 맞춘다.
+platform :ios, '15.0'
 
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
 project 'Runner', {
@@ -29,9 +30,15 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_frameworks!
+  # GoogleMaps(Objective-C 프레임워크)를 Swift에서 import 하려면 modular headers가
+  # 필요하다. use_frameworks! 만으로는 google_maps_flutter_ios 빌드에서
+  # "module 'GoogleMaps' not found"가 날 수 있다.
   use_modular_headers!
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|
