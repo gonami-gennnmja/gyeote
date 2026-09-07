@@ -48,11 +48,12 @@ dev_dependencies:
 
 # 설정값은 docs/design/v0.1-release-assets.md 1-4 확정 스펙 기반.
 # 배경은 브랜드 시드 색 단색(#FF4081), 전경/모노크롬은 투명 PNG.
-# ios 는 false — v0.1 은 Android 단독이고 ios/Runner 에 Assets.xcassets 가
-# 아직 없다. v0.2 iOS 스캐폴딩 때 `ios: true` + `remove_alpha_ios` 로 다시 켠다.
+# iOS 는 알파 채널을 허용하지 않아 remove_alpha_ios 로 app_icon.png 의 투명
+# 영역을 흰색으로 채운다(Din 스펙: app_icon.png 는 풀블리드 불투명).
 flutter_launcher_icons:
   android: true
-  ios: false
+  ios: true
+  remove_alpha_ios: true
   image_path: "assets/icon/app_icon.png"
   adaptive_icon_background: "#FF4081"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
