@@ -1,0 +1,212 @@
+# 곁에(Gyeote) — Codemagic CI 설정
+#
+# 이 저장소는 Android 빌드를 개발 환경(리눅스 컨테이너)에서 무료로 돌린다.
+# Codemagic 은 **맥이 없어서 여기서 못 도는 iOS 빌드 전용**으로 쓴다.
+# 무료 플랜은 월 500 macOS(M2) 분이라, iOS 워크플로는 매 커밋이 아니라
+# 태그/수동으로만 돈다(정책은 app/CI_CODEMAGIC.md 참고).
+#
+# 시크릿은 이 파일에 절대 넣지 않는다 — 전부 Codemagic 환경변수 그룹 참조다.
+# 등록해야 할 변수 목록: app/CI_CODEMAGIC.md
+#
+# 현재 상태(2026-09):
+#   - iOS 워크플로는 두 가지가 갖춰져야 실제로 성공한다:
+#       (1) Diana 의 iOS Xcode 스캐폴드(ios/Runner.xcodeproj 등) — 그 전엔
+#           `flutter build ios` 자체가 실패한다.
+#       (2) Apple Developer 계정 연동(App Store Connect API 키) — 그 전엔
+#           서명·IPA·TestFlight 불가. 서명 없는 컴파일 검증까지는 (1)만 있으면 된다.
+#   - 아래 ios 워크플로는 자재가 없으면 "서명 없는 컴파일 검증"으로 자동 강등된다
+#     (스크립트가 App Store Connect 자격증명 유무를 보고 분기).
+
+workflows:
+  # ===========================================================================
+  # iOS — TestFlight 배포 (Codemagic 주 용도)
+  # ===========================================================================
+  ios-testflight:
+    name: iOS · TestFlight
+    working_directory: app
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+
+    environment:
+      flutter: 3.47.1
+      xcode: latest
+      cocoapods: default
+      groups:
+        - gyeote_shared        # SUPABASE_URL, SUPABASE_ANON_KEY
+        - gyeote_ios           # MAPS_API_KEY_IOS, App Store Connect 자격증명(계정 연동 후)
+      vars:
+        BUNDLE_ID: "com.gyeote.app"
+        APP_STORE_APPLE_ID: ""  # 계정 연동 + App Store Connect 앱 레코드 생성 후 채운다(숫자 ID)
+
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: "v*"        # 예: v0.1.0, v0.1.0-rc1 — 릴리즈 후보에만 iOS 빌드
+          include: true
+      cancel_previous_builds: true
+
+    scripts:
+      - name: .env 파일 생성 (flutter_dotenv 번들 에셋 — 없으면 빌드가 에셋 단계에서 실패)
+        script: |
+          set -e
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "SUPABASE_URL / SUPABASE_ANON_KEY 환경변수가 없습니다 (gyeote_shared 그룹 확인)"
+            exit 1
+          fi
+          cat > .env <<EOF
+          SUPABASE_URL=$SUPABASE_URL
+          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          EOF
+          echo ".env 생성 완료 (값은 로그에 찍지 않음)"
+
+      - name: Maps.xcconfig 생성 (iOS Google Maps 키 주입)
+        script: |
+          set -e
+          # ios/Flutter/Maps.xcconfig 는 gitignore 대상. Info.plist 의
+          # $(MAPS_API_KEY) → AppDelegate.swift 가 읽어 GMSServices 에 등록.
+          # Debug.xcconfig / Release.xcconfig 가 이 파일을 #include 해야 노출된다
+          # (그 배선은 Diana 의 iOS 스캐폴드 범위 — app/ios/Flutter/Maps.xcconfig.example 주석 참고).
+          if [ -z "$MAPS_API_KEY_IOS" ]; then
+            echo "경고: MAPS_API_KEY_IOS 없음 — 지도가 회색으로 뜨지만 빌드는 계속"
+            echo "MAPS_API_KEY=" > ios/Flutter/Maps.xcconfig
+          else
+            echo "MAPS_API_KEY=$MAPS_API_KEY_IOS" > ios/Flutter/Maps.xcconfig
+          fi
+
+      - name: flutter pub get
+        script: flutter pub get
+
+      - name: 정적 분석 (맥 분 아끼려 컴파일 전에 fail-fast)
+        script: flutter analyze
+
+      - name: 단위 테스트 (컴파일 전에 fail-fast)
+        script: flutter test
+
+      - name: CocoaPods 설치
+        script: |
+          set -e
+          if [ ! -d ios/Runner.xcodeproj ]; then
+            echo "=================================================================="
+            echo " ios/Runner.xcodeproj 가 없습니다 — Diana 의 iOS 스캐폴드 대기 중."
+            echo " 스캐폴드가 들어오기 전까지 iOS 빌드는 여기서 멈추는 게 정상입니다."
+            echo "=================================================================="
+            exit 1
+          fi
+          find . -name "Podfile" -execdir pod install \;
+
+      - name: iOS 코드사이닝 (Apple Developer 계정 연동 후에만 동작)
+        script: |
+          set -e
+          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
+            echo "App Store Connect 자격증명 없음 — 서명 단계 건너뜀 (계정 대기)"
+            exit 0
+          fi
+          # Codemagic 이 App Store Connect API 키로 프로비저닝 프로파일을 받아 적용
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: 빌드 (자격증명 있으면 서명 IPA, 없으면 서명 없는 컴파일 검증)
+        script: |
+          set -e
+          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
+            echo ">>> 계정 대기 모드: flutter build ios --release --no-codesign (컴파일·링크 검증만)"
+            flutter build ios --release --no-codesign
+          else
+            echo ">>> 배포 모드: flutter build ipa --release"
+            # 서명은 앞 스텝의 `xcode-project use-profiles` 가 프로젝트에 적용해 둔다
+            flutter build ipa --release
+          fi
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/iphoneos/*.app          # 서명 없는 검증 빌드 산출물
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    # -------------------------------------------------------------------------
+    # 아래 publishing 블록은 Apple Developer 계정 연동 + Codemagic 에
+    # App Store Connect 통합 등록이 끝난 뒤 주석을 푼다.
+    # 그 전에 켜 두면 자격증명이 없어 워크플로 전체가 실패한다.
+    # -------------------------------------------------------------------------
+    # publishing:
+    #   app_store_connect:
+    #     auth: integration
+    #     submit_to_testflight: true
+    #     beta_groups:
+    #       - "곁에 내부 테스트"
+    #     submit_to_app_store: false
+
+  # ===========================================================================
+  # Android — AAB (예비용, 평소엔 개발 환경에서 무료로 돌림)
+  # ===========================================================================
+  # 이 워크플로는 자동 트리거가 없다(수동 실행 전용). Android 빌드는
+  # app/RELEASE_RUNBOOK.md 대로 개발 컨테이너에서 무료로 나오므로, Codemagic
+  # 의 500분은 iOS 에 쓴다. 이 워크플로는 "깨끗한 CI 환경에서 한 번 확인하고
+  # 싶을 때" 또는 "iOS 태그 빌드와 짝 맞춘 AAB 를 같이 뽑고 싶을 때"만 쓴다.
+  android-appbundle:
+    name: Android · AAB (수동)
+    working_directory: app
+    instance_type: linux_x2
+    max_build_duration: 30
+
+    environment:
+      flutter: 3.47.1
+      groups:
+        - gyeote_shared        # SUPABASE_URL, SUPABASE_ANON_KEY
+        - gyeote_android       # MAPS_API_KEY_ANDROID, 업로드 키스토어(CM_* 또는 아래 커스텀)
+      vars:
+        PACKAGE_NAME: "com.gyeote.app"
+
+    # triggering 블록 없음 = 자동 트리거 없음. Codemagic UI 의 "Start new build"
+    # 로만 실행된다(Android 는 개발 환경에서 무료로 빌드하므로 분을 아낀다).
+
+    scripts:
+      - name: .env 파일 생성
+        script: |
+          set -e
+          cat > .env <<EOF
+          SUPABASE_URL=$SUPABASE_URL
+          SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
+          EOF
+
+      - name: 업로드 키스토어 복원 + key.properties 작성
+        script: |
+          set -e
+          # Codemagic Android code signing 을 등록하면 $CM_KEYSTORE_PATH 등이 채워진다.
+          # build.gradle 은 android/key.properties 파일을 읽으므로 여기서 만들어준다.
+          if [ -z "$CM_KEYSTORE_PATH" ]; then
+            echo "Android 서명 정보 없음 — release 가 debug 키로 폴백됨(스토어 업로드 불가)"
+          else
+            cat > android/key.properties <<EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
+          fi
+
+      - name: flutter pub get
+        script: flutter pub get
+
+      - name: 정적 분석 + 테스트
+        script: |
+          set -e
+          flutter analyze
+          flutter test
+
+      - name: AAB 빌드
+        script: |
+          set -e
+          # MAPS_API_KEY 는 build.gradle 이 System.getenv 로 직접 읽는다.
+          export MAPS_API_KEY="$MAPS_API_KEY_ANDROID"
+          flutter build appbundle --release
+
+    artifacts:
+      - build/app/outputs/bundle/**/*.aab
+      - build/app/outputs/**/mapping.txt
+      - build/app/outputs/**/*.apk
