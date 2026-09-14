@@ -86,7 +86,11 @@ workflows:
         script: flutter pub get
 
       - name: 정적 분석 (맥 분 아끼려 컴파일 전에 fail-fast)
-        script: flutter analyze
+        # --no-fatal-infos: flutter analyze 는 info 레벨만 있어도 exit 1 을 낸다.
+        # 이 프로젝트의 기준선은 "에러 0 / 경고 0 / info 는 허용"이고(app/README.md),
+        # 남은 info 는 deprecated API·스타일 권고라 기능과 무관해 별도 정리 작업으로
+        # 미뤄둔 것들이다. 경고는 계속 빌드를 깨야 하므로 fatal 로 남긴다.
+        script: flutter analyze --no-fatal-infos
 
       - name: 단위 테스트 (컴파일 전에 fail-fast)
         script: flutter test
@@ -209,7 +213,7 @@ workflows:
       - name: 정적 분석 + 테스트
         script: |
           set -e
-          flutter analyze
+          flutter analyze --no-fatal-infos
           flutter test
 
       - name: AAB 빌드
