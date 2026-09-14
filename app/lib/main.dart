@@ -26,8 +26,18 @@ class GyeoteApp extends StatelessWidget {
     return MaterialApp(
       title: '곁에',
       debugShowCheckedModeBanner: false,
+      // 로고 2B(2026-09-14, e2920d1) 반영 — 인디고 `#3B4272`(파형/구조)로 시드
+      // 변경. 로즈 `#D4685E`(하트/애정)를 시드로 잡으면 M3가 모든 버튼·선택
+      // 상태에 그 색을 퍼뜨려 "하트는 희소하게"라는 로고의 역할 분리 논리가
+      // UI에서 무너진다. 인디고를 시드로 두면 상시 노출되는 크롬은 차분하게
+      // 가라앉고, 로즈는 M3가 파생하는 tertiary 자리에 남는다(자세한 근거:
+      // docs/design/v0.1-release-assets.md §1-5). 아이콘 배경(1-1)과 같은
+      // 값이라 스토어 아이콘 -> 앱 실행 -> UI 색이 끊기지 않는다.
+      // fromSeed가 파생한 tertiary가 로즈감이 부족하면
+      // `.copyWith(tertiary: const Color(0xFFD4685E))`로 override하는 것도
+      // 문서에 옵션으로 적혀 있다 — 1차는 순수 fromSeed로 두고 눈으로 확인.
       theme: ThemeData(
-        colorSchemeSeed: Colors.pinkAccent,
+        colorSchemeSeed: const Color(0xFF3B4272),
         useMaterial3: true,
       ),
       onGenerateRoute: AppRouter.onGenerateRoute,
