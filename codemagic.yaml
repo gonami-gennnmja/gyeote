@@ -36,7 +36,10 @@ workflows:
         - gyeote_ios           # MAPS_API_KEY_IOS, App Store Connect 자격증명(계정 연동 후)
       vars:
         BUNDLE_ID: "com.gyeote.app"
-        APP_STORE_APPLE_ID: ""  # 계정 연동 + App Store Connect 앱 레코드 생성 후 채운다(숫자 ID)
+        # APP_STORE_APPLE_ID 는 여기 두지 않는다 — Codemagic 은 vars 의 빈 문자열을
+        # 검증에서 거부한다("ensure this value has at least 1 characters"). App Store
+        # Connect 앱 레코드를 만든 뒤 그 숫자 ID 를 gyeote_ios 환경변수 그룹에 넣고,
+        # 아래 publishing 절을 열 때 참조한다.
 
     triggering:
       events:
