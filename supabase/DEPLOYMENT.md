@@ -4,14 +4,13 @@
 마이그레이션을 적용하고 v0.1 앱 빌드를 연결하는 절차**를 다룬다.
 `supabase/README.md`는 로컬 개발만 다루므로, 운영 배포는 이 문서를 따른다.
 
-> **현재 상태 (2026-09-07):** 운영 프로젝트 확보됨(아래 0장 참고). **운영 DB에
-> 마이그레이션이 하나도 적용돼 있지 않다** — Auth만 살아 있고 스키마는 비어
-> 있다(가인님이 anon key로 확인: `rpc/get_invitation_preview` → PGRST202,
-> `rest/v1/profiles` → 404). 초기 스키마를 적용하는 방법은 두 가지 —
-> **경로 A**(`supabase db push`, CLI + 액세스 토큰/DB 비밀번호 필요, 아직 없음)
-> 또는 **경로 B**(대시보드 SQL Editor에 `supabase/bundle/v0.1_initial.sql`
-> 붙여넣기, CLI·토큰 불필요). CLI 세팅이 부담이거나 심사가 급하면 경로 B로
-> 지금 바로 적용 가능하다. "배포 경로 선택" 절 참고.
+> **현재 상태 (2026-09-14):** 마이그레이션 16개 **전부 운영에 적용 완료**
+> (경로 A, `db push`). 도중 `20260820090012`에서 `must be owner of table
+> messages` 에러로 한 번 막혔고 — 로컬 통과 ≠ 운영 통과가 실제로 터진
+> 사례(아래 §2 "실제로 이게 터진 사례" 참고) — `dc02bf9`로 고치고 재적용해
+> 통과했다. 적용 결과: public 테이블 7개, RLS 정책 12개, 함수 20개, 원장
+> 16행, pg_cron 잡 등록·`active=true`, `realtime.messages` 정책 생성 확인.
+> 남은 건 §0의 (d)/(e) 미확인 값과 §6 스모크 체크.
 
 ---
 
@@ -23,13 +22,13 @@
 | (a) project-ref | `cpaxqjqijrawmevzivwz` | **확정** |
 | (a) region | `ap-northeast-2` (서울) | **확정** |
 | (a) plan | — | 미확인(배포에 필수 아님) |
-| (b) 적용된 마이그레이션 | **0개** (스키마 비어 있음, Auth만 동작) | **확정** (2026-09-06, anon key 확인) |
+| (b) 적용된 마이그레이션 | **16개 전부** (public 테이블 7, RLS 정책 12, 함수 20) | **확정** (2026-09-14, `dc02bf9` 이후 `db push` 완료) |
 | (c) SUPABASE_URL | `https://cpaxqjqijrawmevzivwz.supabase.co` | **확정** |
 | (c) SUPABASE_ANON_KEY | 확보됨 — `app/.env`에 있음(gitignore 대상, 리포에 커밋 안 함) | **확정** |
-| (d) 원격 PG 메이저 버전 | — | 미확인. `db push` 전에 `show server_version;`으로 확인 권장(`config.toml`은 `major_version = 17` 전제) |
-| (d) 확장 활성화 상태 | `postgis` / `pgcrypto` / `pg_cron` | 미확인. 3장 참고 — 특히 `pg_cron`은 대시보드에서 먼저 켜는 걸 권장 |
+| (d) 원격 PG 메이저 버전 | — | 미확인(배포 자체는 통과했으므로 급하지 않음). 확인하려면 `show server_version;` |
+| (d) 확장 활성화 상태 | `postgis` / `pgcrypto` / `pg_cron` | **확정 — 셋 다 동작 확인.** `pg_cron` 잡 `gyeote-location-history-retention` 등록·`active=true`까지 확인(2026-09-14) |
 | (e) service_role 키 보관처 | — | 미정. 스케줄러/관리 작업용, 절대 리포·앱 빌드에 넣지 않음 |
-| **db push 실행 수단** | Supabase 액세스 토큰(`SUPABASE_ACCESS_TOKEN`) **또는** DB 비밀번호 | **없음 — 이게 현재 배포 차단 요소.** 가인님이 직접 실행하거나 제공 필요 |
+| **db push 실행 수단** | Supabase 액세스 토큰(`SUPABASE_ACCESS_TOKEN`) **또는** DB 비밀번호 | **확보·사용됨** — 가인님이 직접 실행(2026-09-14). 이후 재적용/증분 적용에도 동일 수단 필요 |
 | (f) Auth 이메일 확인 | **운영은 이메일 확인 필수** (`auth/v1/settings`의 `mailer_autoconfirm = false`) | **확정** (2026-09-06). 로컬 `config.toml`의 `enable_confirmations = false`와 정반대 — 5장 참고 |
 
 ---
@@ -120,6 +119,55 @@ QA가 로컬 `gyeote_test`(순수 PG14)에서 마이그레이션을 검증할 �
 그대로 먹는다는 보장은 아니다. `supabase db push`는 이 리포에서 **처음으로
 실제 Supabase에 적용되는 경로**이며, `--dry-run`은 실행이 아니라 적용 계획만
 보여준다(스텁 없는 진짜 환경에서의 성공 여부는 알려주지 않는다).
+
+#### 실제로 이게 터진 사례 (2026-09-14, 운영 최초 적용)
+
+이론이 아니라 실제로 이 문서가 우려한 그 형태로 막혔다. 무슨 에러가 어디서
+왜 났는지 그대로 남긴다 — 다음에 비슷한 걸 또 만들 때 같은 데서 헤매지 않기
+위해서다.
+
+- **증상:** 운영 프로젝트에 첫 `db push`(경로 A)를 실행하자
+  `20260820090012_location_realtime.sql`에서
+  `ERROR: must be owner of table messages`로 멈췄다. 이 파일 전체가 하나의
+  마이그레이션(트랜잭션)이라 이 파일만 롤백되고, **번들(경로 B)로 시도했다면
+  16개 전부 롤백됐을 것**이다.
+- **원인:** 이 마이그레이션의 DO 블록은 `realtime.messages` 테이블 존재
+  여부만 `information_schema.tables`로 확인한 뒤, 무조건
+  `alter table realtime.messages enable row level security`를 실행했다.
+  로컬 `gyeote_test`에서는 이 테이블을 우리가(=`postgres`로) 직접 만들어서
+  소유자가 맞았기 때문에 통과했다. **호스티드 Supabase에서는
+  `realtime.messages`의 소유자가 `supabase_realtime_admin`이고 RLS도 이미
+  켜져 있다** — `postgres`는 그 테이블의 소유자가 아니므로
+  `ALTER TABLE ... ENABLE/DISABLE ROW LEVEL SECURITY`가 권한 에러로
+  거부된다(Postgres에서 이 ALTER는 오너십을 요구한다). 즉 "로컬에서 우리가
+  만든 테이블"과 "운영에서 플랫폼이 이미 만들어둔 같은 이름의 테이블"이
+  소유자가 다르다는, 스텁으로는 절대 드러나지 않는 종류의 차이였다.
+- **수정:** `pg_class.relrowsecurity`로 RLS가 이미 켜져 있는지 먼저 보고,
+  켜져 있으면 그 ALTER를 건너뛴다(꺼져 있을 때만 시도). **`CREATE POLICY`는
+  오너십이 없어도 허용된다는 것을 운영에서 직접 확인**했다(Supabase가
+  Realtime Authorization을 위해 문서화해 둔 공식 지원 경로라 `postgres`에
+  정책 관리 권한만 별도로 부여돼 있는 것으로 보인다 — ALTER는 막고 정책은
+  허용하는 이 비대칭은 "고객이 RLS를 끄는 건 막되 정책은 커스터마이즈하게
+  둔다"는 Supabase 쪽 설계로 추정, 공식 확인은 아님).
+- **커밋:** `dc02bf9`. 적용 결과: public 테이블 7개, RLS 정책 12개, 함수
+  20개, 원장 16행, pg_cron 잡 등록·`active=true`, `realtime.messages` 정책
+  생성까지 전부 확인.
+- **왜 로컬에서 못 잡았나 — 근본 원인.** 이 클래스의 버그는 "그 객체를
+  누가 만들었는지"가 로컬 스텁과 운영에서 다를 때만 생긴다. 우리가 만드는
+  `public.*` 테이블은 로컬·운영 어디서 적용하든 우리가 소유자이므로 안전하다.
+  위험한 건 **플랫폼이 미리 만들어 둔 객체**(`auth.users`, `realtime.messages`,
+  향후 `storage.*` 등)를 건드리는 구문 — 그중에서도 오너십을 요구하는 DDL
+  (`ALTER TABLE ... ENABLE/DISABLE RLS`, `ALTER ... OWNER TO`, 시퀀스/타입
+  오너십 변경 등)이다. 반대로 **권한(GRANT)만 있으면 되는 조작**
+  (`CREATE TRIGGER`, `CREATE POLICY`, 함수 `EXECUTE` 호출)은 오너십이 없어도
+  Supabase가 플랫폼 표준 워크플로로 지원하는 한 대개 통과한다(`auth.users`
+  트리거, 이번 `realtime.messages` 정책 둘 다 이 경우).
+- **일반화한 점검 기준 (다음에 플랫폼 소유 객체를 건드릴 때):** 그 구문이
+  "오너십이 있어야만 허용"되는 부류(ALTER TABLE의 RLS on/off, OWNER TO)인지,
+  아니면 "GRANT만 있으면 되는" 부류(CREATE POLICY/TRIGGER, 함수 호출)인지
+  먼저 구분한다. 전자면 로컬 스텁이 통과시켜도 운영에서 막힐 수 있다고 가정
+  하고, 무조건 실행하지 말고 **현재 상태를 먼저 조회해 조건부로 실행**한다
+  (이번 수정이 `pg_class.relrowsecurity`로 한 것과 같은 패턴).
 
 ### 첫 `db push`가 중간에 깨졌을 때
 
@@ -396,21 +444,18 @@ flutter build apk --release \
 
 - [x] 운영 프로젝트 확보 — ref `cpaxqjqijrawmevzivwz`, region `ap-northeast-2`,
   URL/anon key 확보(`app/.env`). (2026-09-06)
-- [ ] 마이그레이션 16개 적용 — **경로 A**(`supabase db push`, 액세스 토큰/DB
-  비밀번호 필요 — 현재 없음, 가인님이 직접 실행하거나 토큰 제공) **또는
-  경로 B**(대시보드 SQL Editor에 `supabase/bundle/v0.1_initial.sql` 붙여넣기,
-  CLI·토큰 불필요). "배포 경로 선택" 표 참고.
-- [ ] 0장 나머지 미확인 값: (d) 원격 PG 버전·확장 상태, (e) service_role 키 보관처.
-- [ ] 적용 후 검증 통과 — 경로 A는 `db diff --linked` 비어 있음 / 경로 B는
-  스모크 쿼리(public 테이블 7, 원장 16행). 둘 다 `schema_migrations` 16행 확인.
-- [ ] 보안 회귀 테스트 3종이 원격 DB 대상으로 PASS.
-- [ ] **정리 경로가 살아 있다 (둘 중 하나) — `docs/legal/privacy.html`의
-  "위치 이력 최대 14일 보관" 약속이 실제로 지켜지는지가 이 항목 하나에
-  달려 있다. 운영 편의 체크가 아니라 게시된 방침 문구의 진위 확인이다:**
-  - 1안: `cron.job`에 `gyeote-location-history-retention` 행이 있고
-    `active = true` ([3장 잡 등록 확인](#cron-job-verify)). — **`db push`
-    "성공"과 별개로 이 쿼리를 직접 돌려 확인. 행이 없으면 배포 미완료.**
-  - 2안: 예약 Edge Function이 등록됐고 최근 실행 기록이 있다.
+- [x] 마이그레이션 16개 적용 — 경로 A(`supabase db push`)로 완료. 도중
+  `20260820090012` 실패(§2 "실제로 이게 터진 사례") → `dc02bf9`로 고치고
+  재적용해 통과. (2026-09-14)
+- [ ] 0장 나머지 미확인 값: (d) 원격 PG 버전, (e) service_role 키 보관처.
+- [x] 적용 후 검증 — `schema_migrations` 16행, public 테이블 7, RLS 정책 12,
+  함수 20 확인. (2026-09-14)
+- [ ] 보안 회귀 테스트 3종이 원격 DB 대상으로 PASS. (아직 미실행 — 마이그레이션
+  적용 자체는 됐지만 이 항목은 별도 확인 필요)
+- [x] **정리 경로가 살아 있다 — `docs/legal/privacy.html`의 "위치 이력 최대
+  14일 보관" 약속이 실제로 지켜지는지가 이 항목 하나에 달려 있다.**
+  `cron.job`에 `gyeote-location-history-retention` 행 존재·`active = true`
+  확인됨(2026-09-14, [3장 잡 등록 확인](#cron-job-verify)).
 - [ ] 앱 릴리즈 빌드에 운영 `SUPABASE_URL` / `anon` 키가 주입됐다(`service_role`
   키는 앱에 없음).
 - [ ] 운영 SMTP 설정 완료(비밀번호 재설정 메일 발송 경로).
