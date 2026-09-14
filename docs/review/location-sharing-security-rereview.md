@@ -89,6 +89,42 @@ battery_level 입력 검증). 이어서 프론트 P0 6건과 후속 수정/리�
 피하기 쉽다) — 다만 상단에 이 "최종 상태" 요약을 추가해 문서 앞부분만 보는 사람이 이미 해결된
 항목을 미해결로 오인하지 않도록 했다.
 
+## v0.2 이월 항목 (Rena, 최종 갱신 2026-09-14)
+
+이번 v0.1 라운드 검토 중 발견했지만 출시를 막을 사안은 아니라고 판단해 v0.2로 미룬 것들을
+한곳에 모은다(Plexa 요청, 2026-09-14 — UX 검토서·릴리즈 자산 문서·이 문서에 흩어져 있어
+나중에 취합할 때 누락되기 쉽다). 다른 문서에 이미 상세히 적힌 항목은 판단 근거만 요약하고
+원문 위치를 가리키기만 한다. 다른 담당자 문서의 항목 자체를 이리로 옮기지는 않았다.
+
+1. **`can_view_location` 게이팅 아키텍처 재검토** — 상세는 이 문서의 「최종 상태」 문단 중
+   `is_location_paused` 재확인 항목과, 아래 「`is_location_paused`의 "설정 행 존재 여부"
+   오라클」 섹션 참고. 크로스그룹 `can_view_location`을 특정 그룹 한정으로 좁힐지가 핵심.
+2. **위치 수집의 앱 라이프사이클 연동(`AppLifecycleState`)** — 상세는
+   `docs/design/v0.1-release-assets.md` §7("v0.2 이연 — 위치 수집의 라이프사이클 연동")과
+   `docs/design/location-sharing-ux-review.md`의 v0.1/v0.2 범위 표. `location_collector_service`가
+   백그라운드 전환 시 하트비트 타이머를 스스로 멈추지 않아, 개인정보처리방침 문구를 "OS가
+   실행을 제한합니다" 수준으로 완화한 근거이기도 하다.
+3. **`authServerErrors`의 넓은 `contains` 키 정리** — P0-8 리뷰(2026-09-03) 지적, 다른 문서에
+   없어 여기 처음 기록한다. `invalid format`/`request this after` 등 넓은 부분일치 키가 있어
+   의도와 다른 GoTrue 원문에도 걸릴 여지가 있음(항상 안전한 한글로 덮이므로 정보노출은 아니고
+   문구 정확도 문제). GoTrue가 정식 에러 코드를 안정적으로 제공하면 코드 기반 매칭으로 정리.
+4. **`invitation_accept_screen.dart`의 `_accept`에 `on RelationshipException` 핸들러 부재** —
+   P0-8 리뷰(2026-09-03) 지적, 다른 문서에 없어 여기 처음 기록한다. 현재 `acceptInvitation()`이
+   이 예외를 던지지 않아 무해하지만, repository 구현이 바뀌면 그 예외가 제네릭 `catch (e)`
+   폴백으로만 처리돼 화면별 맥락 있는 안내를 잃을 수 있다.
+5. **`location_history(captured_at)` 단독 인덱스** — retention 마이그레이션 리뷰(2026-09-03)
+   지적, 다른 문서에 없어 여기 처음 기록한다. `delete_expired_location_history()`의
+   `where captured_at < X`가 기존 `idx_location_history_user_captured`(`user_id` 선두)를 못
+   써서 매일 정리 잡이 seq scan을 돈다 — 테이블이 커질수록 체감된다.
+6. **`GroupCreateScreen`/`InvitationAcceptScreen`/`GroupDetailScreen`에 repository 주입 seam
+   적용** — setState-Future 버그 리뷰(2026-09-14) 후속, 다른 문서에 없어 여기 처음 기록한다.
+   `LocationMapScreen`/`SignupScreen`/`GroupListScreen`이 이미 쓰는
+   `widget.repository ?? XRepository()` 패턴을 이 세 화면에도 적용하면, 지금은 위젯 테스트가
+   못 태우는 push→pop→`_reload()` 왕복 경로(그룹 생성/초대 수락/상세화면 복귀)까지 테스트할 수
+   있게 된다. 동기: 오늘 이 gap 때문에 `setState` 콜백이 `Future`를 반환하는 버그가
+   `flutter analyze`와 기존 98개 테스트를 전부 통과하고 실기 스모크에서만 터졌다(`7e28a0f`).
+   프로덕션 동작 무변경, 순수 테스트 인프라 확장이라 v0.1 동결 원칙과 안 부딪힌다.
+
 ---
 
 ## (1) HIGH-1 / HIGH-2가 실제로 닫혔는가
