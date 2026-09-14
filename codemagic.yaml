@@ -170,6 +170,16 @@ workflows:
 
     environment:
       flutter: 3.47.1
+      # Codemagic 에 등록한 Android 키스토어를 이 워크플로에 붙인다.
+      # !! 실행 전에 먼저 등록해야 한다 !!
+      #   Codemagic > Teams/앱 설정 > Code signing identities > Android keystores
+      #   > Add keystore 에 upload-keystore.jks 업로드, 비밀번호·별칭(upload) 입력,
+      #   Reference name 을 정확히 gyeote_upload 로 지정.
+      # 등록하지 않고 실행하면 "unknown android signing reference" 로 빌드가
+      # 시작되지 않는다. 등록 없이 돌리고 싶으면 이 두 줄을 주석 처리하면 되는데,
+      # 그 경우 release 가 debug 키로 폴백돼 Play 업로드가 불가능한 AAB 가 나온다.
+      android_signing:
+        - gyeote_upload
       groups:
         - gyeote_shared        # SUPABASE_URL, SUPABASE_ANON_KEY
         # gyeote_android 도 같은 이유로 주석 처리. 업로드 키스토어와 Android Maps
