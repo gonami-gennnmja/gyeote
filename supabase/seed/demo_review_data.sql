@@ -11,6 +11,12 @@
 --   3) 계정 B 의 최신 위치 1건 (captured_at / received_at = 실행 시점 now())
 --   → 리뷰어가 A 로 로그인해 지도를 열면 B 가 지도에 보인다.
 --
+--   이메일을 잘못 채워 실재하는 계정을 가리키면 그 계정의 nickname·그룹
+--   멤버십·(B 자리면) 위치·공유모드가 조용히 덮일 수 있어, 쓰기 전에
+--   "실사용자 오염 방지 가드"(아래)가 대상 계정이 데모 그룹 외 다른
+--   관계 그룹에 이미 속해 있는지 먼저 확인하고, 걸리면 아무 것도 쓰지 않고
+--   중단한다.
+--
 -- ── 사전조건 ────────────────────────────────────────────────────────────────
 --   데모 계정 A·B 가 이미 auth.users 에 있어야 한다. 대시보드
 --   Authentication > Users > Add user 로 **비밀번호까지 설정해서** 생성한다
@@ -21,6 +27,32 @@
 -- ── 실행 방법 ───────────────────────────────────────────────────────────────
 --   대시보드 SQL Editor > New query > 아래 두 이메일 값을 채우고 > Run.
 --
+-- ── 실행 전 미리보기(권장, Rena 제안) ──────────────────────────────────────
+--   아래 두 이메일이 정말 의도한 데모 계정인지, 오타로 실재하는 다른 계정을
+--   가리키고 있지 않은지 먼저 눈으로 확인한다. 이 파일 맨 아래에도 같은
+--   쿼리가 있으니, 전체를 돌리기 전에 이 블록만 따로 복사해 먼저 실행해도
+--   된다:
+--
+--     select u.email, p.nickname, u.created_at
+--       from auth.users u
+--       join public.profiles p using (id)
+--      where u.email in ('DEMO_ACCOUNT_A_EMAIL', 'DEMO_ACCOUNT_B_EMAIL');
+--
+--   다만 이 미리보기는 "권장"일 뿐 강제가 아니다 — 안내는 건너뛸 수 있지만,
+--   아래 DO 블록의 가드는 건너뛸 수 없다(다음 항목).
+--
+-- ── 실사용자 오염 방지 가드 (건너뛸 수 없음) ────────────────────────────────
+--   이메일 오타로 실재하는 계정을 가리키면, 그 계정의 nickname·그룹멤버십이
+--   조용히 덮이고(A·B 공통) B 라면 위치·공유모드까지 덮인다 — 그 계정이 다른
+--   실그룹에서 활성 공유 중이면 그 그룹 상대에게 가짜 위치(서울시청)가 잠깐
+--   보인다(Rena 지적, 2026-09-14). 위치공유 앱에서 남의 위치를 잘못 표시하는
+--   건 짧아도 신뢰 문제이므로, 안내(미리보기)보다 강한 가드를 건다: **대상
+--   계정(A 또는 B)이 데모 그룹(v_demo_group_id) 외의 다른 relationship_members
+--   행을 이미 갖고 있으면 즉시 raise exception 으로 중단**한다(아무것도
+--   쓰지 않고 멈춤). 갓 만든 데모 계정은 어떤 그룹에도 안 속해 있으므로
+--   정상 경로는 막히지 않고, 실사용자는 자기 그룹이 있을 확률이 높아 거의
+--   확실히 걸린다. 재실행 시에는 데모 그룹 멤버십 자체는 이 검사에서
+--   제외되므로(= 그 그룹이 아닌 다른 그룹만 검사) 멱등성은 그대로 유지된다.
 -- ── 신선도(stale) 주의 ─────────────────────────────────────────────────────
 --   지도는 위치가 30분 이상 지나면 흐리게(불투명도 0.55) 표시하고 "N분 전"
 --   라벨을 붙인다(PeerLocation.staleThreshold / staleOpacity). 이 판정은
@@ -53,6 +85,7 @@ declare
 
   v_a uuid;
   v_b uuid;
+  v_other_group_id uuid;
 begin
   if v_email_a = 'DEMO_ACCOUNT_A_EMAIL' or v_email_b = 'DEMO_ACCOUNT_B_EMAIL' then
     raise exception '데모 계정 이메일 두 개(v_email_a / v_email_b)를 먼저 채우세요';
@@ -69,6 +102,29 @@ begin
   end if;
   if v_a = v_b then
     raise exception '데모 계정 A 와 B 가 동일합니다 — 서로 다른 계정이어야 합니다';
+  end if;
+
+  -- 0) 실사용자 오염 방지 가드. 데모 그룹(v_demo_group_id) 자체의 멤버십은
+  --    재실행 멱등성을 위해 검사에서 제외하고, "그 외" 다른 그룹 소속이
+  --    하나라도 있으면 즉시 중단한다(아직 아무 것도 쓰지 않은 시점).
+  select group_id into v_other_group_id
+    from public.relationship_members
+   where user_id = v_a
+     and group_id <> v_demo_group_id
+   limit 1;
+  if v_other_group_id is not null then
+    raise exception '데모 계정 A (email=%, id=%) 가 데모 그룹 외 다른 관계 그룹(%)에 이미 소속돼 있습니다 — 실사용자 계정일 수 있습니다, 이메일을 확인하세요.',
+      v_email_a, v_a, v_other_group_id;
+  end if;
+
+  select group_id into v_other_group_id
+    from public.relationship_members
+   where user_id = v_b
+     and group_id <> v_demo_group_id
+   limit 1;
+  if v_other_group_id is not null then
+    raise exception '데모 계정 B (email=%, id=%) 가 데모 그룹 외 다른 관계 그룹(%)에 이미 소속돼 있습니다 — 실사용자 계정일 수 있습니다, 이메일을 확인하세요.',
+      v_email_b, v_b, v_other_group_id;
   end if;
 
   -- 1) 프로필 닉네임을 데모용으로 보기 좋게(트리거가 넣은 이메일 로컬파트 대체). 멱등.
