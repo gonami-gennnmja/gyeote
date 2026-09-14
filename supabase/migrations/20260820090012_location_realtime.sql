@@ -107,7 +107,18 @@ begin
        where table_schema = 'realtime' and table_name = 'messages'
      )
   then
-    execute 'alter table realtime.messages enable row level security';
+    -- 호스티드 Supabase 에서는 realtime.messages 의 소유자가 supabase_realtime_admin
+    -- 이고 RLS 가 이미 켜져 있다. 이때 postgres 로 alter 를 걸면 'must be owner of
+    -- table messages' 로 마이그레이션 전체가 실패한다. 이미 켜져 있으면 건너뛴다
+    -- (정책 생성은 소유자가 아니어도 허용되는 것을 운영에서 확인함).
+    if not (
+      select c.relrowsecurity
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'realtime' and c.relname = 'messages'
+    ) then
+      execute 'alter table realtime.messages enable row level security';
+    end if;
 
     execute 'drop policy if exists "location_broadcast_group_members_only" on realtime.messages';
 
