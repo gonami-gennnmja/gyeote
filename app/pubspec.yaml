@@ -46,16 +46,18 @@ dev_dependencies:
   # Din 이 넣은 adaptive 세트(docs/design/v0.1-release-assets.md 1-3 스펙).
   flutter_launcher_icons: ^0.14.1
 
-# 설정값은 docs/design/v0.1-release-assets.md 1-4 확정 스펙 기반.
-# 배경은 브랜드 시드 색 단색(#FF4081), 전경/모노크롬은 투명 PNG.
-# iOS 는 알파 채널을 허용하지 않아 remove_alpha_ios 로 app_icon.png 의 투명
-# 영역을 흰색으로 채운다(Din 스펙: app_icon.png 는 풀블리드 불투명).
+# 설정값은 docs/design/v0.1-release-assets.md 1-3 확정 스펙 기반.
+# 로고 2B(2026-09-14, e2920d1) 반영 — 배경은 브랜드 시드 색 단색(#3B4272,
+# 인디고), 전경/모노크롬은 투명 PNG. adaptive_icon_background 는 값(hex)과
+# assets/icon/app_icon_background.png(단색 인디고) 둘 다 동일 결과라 값으로
+# 둔다. iOS 는 알파 채널을 허용하지 않아 remove_alpha_ios 로 app_icon.png 의
+# 투명 영역을 흰색으로 채운다(Din 스펙: app_icon.png 는 풀블리드 불투명).
 flutter_launcher_icons:
   android: true
   ios: true
   remove_alpha_ios: true
   image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "#FF4081"
+  adaptive_icon_background: "#3B4272"
   adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
   adaptive_icon_monochrome: "assets/icon/app_icon_monochrome.png"
   min_sdk_android: 24
