@@ -33,7 +33,12 @@ workflows:
       cocoapods: default
       groups:
         - gyeote_shared        # SUPABASE_URL, SUPABASE_ANON_KEY
-        - gyeote_ios           # MAPS_API_KEY_IOS, App Store Connect 자격증명(계정 연동 후)
+        # gyeote_ios 는 Codemagic 에 그 이름의 변수 그룹이 실제로 만들어진 뒤에만
+        # 참조해야 한다 — 없는 그룹을 적으면 "references to unknown variable group(s)"
+        # 로 빌드가 시작도 못 한다. MAPS_API_KEY_IOS 는 없어도 아래 스크립트가
+        # 경고만 남기고 계속 진행하므로(지도만 회색), iOS Maps 키와 App Store
+        # Connect 자격증명이 준비되면 그때 그룹을 만들고 이 줄을 되살린다.
+        # - gyeote_ios
       vars:
         BUNDLE_ID: "com.gyeote.app"
         # APP_STORE_APPLE_ID 는 여기 두지 않는다 — Codemagic 은 vars 의 빈 문자열을
@@ -163,7 +168,10 @@ workflows:
       flutter: 3.47.1
       groups:
         - gyeote_shared        # SUPABASE_URL, SUPABASE_ANON_KEY
-        - gyeote_android       # MAPS_API_KEY_ANDROID, 업로드 키스토어(CM_* 또는 아래 커스텀)
+        # gyeote_android 도 같은 이유로 주석 처리. 업로드 키스토어와 Android Maps
+        # 키를 Codemagic 에 등록할 때 그룹을 만들고 되살린다(Android 는 평소 개발
+        # 환경에서 무료로 빌드하므로 이 워크플로 자체가 예비용이다).
+        # - gyeote_android
       vars:
         PACKAGE_NAME: "com.gyeote.app"
 
