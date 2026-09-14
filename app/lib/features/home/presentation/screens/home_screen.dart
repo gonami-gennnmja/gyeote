@@ -62,7 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     // 설정 화면에서 모드/일시중지를 바꾸고 돌아왔을 수 있으니 캡션을 새로
     // 불러온다 — 안 그러면 실제 공유 상태와 홈 화면 캡션이 어긋난다.
-    if (mounted) setState(() => _shareStatusFuture = _loadShareStatus());
+    if (mounted) {
+      setState(() {
+        _shareStatusFuture = _loadShareStatus();
+      });
+    }
   }
 
   @override

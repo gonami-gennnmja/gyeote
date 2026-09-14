@@ -54,7 +54,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   }
 
   void _reload() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   Future<void> _createInvitation() async {

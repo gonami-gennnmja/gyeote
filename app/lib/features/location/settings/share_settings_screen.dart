@@ -70,7 +70,9 @@ class _ShareSettingsScreenState extends State<ShareSettingsScreen> {
   }
 
   void _reload() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   Future<void> _toggleCollector(bool enable) async {

@@ -13,14 +13,20 @@ import 'invitation_accept_screen.dart';
 ///
 /// 진입점: 홈 화면의 "관계 그룹" 버튼.
 class GroupListScreen extends StatefulWidget {
-  const GroupListScreen({super.key});
+  const GroupListScreen({super.key, RelationshipRepository? repository})
+      : _repository = repository;
+
+  /// 테스트에서 주입하기 위한 것. 실제 앱에서는 null이고 [RelationshipRepository]를
+  /// 직접 만든다.
+  final RelationshipRepository? _repository;
 
   @override
   State<GroupListScreen> createState() => _GroupListScreenState();
 }
 
 class _GroupListScreenState extends State<GroupListScreen> {
-  final _repository = RelationshipRepository();
+  late final RelationshipRepository _repository =
+      widget._repository ?? RelationshipRepository();
   late Future<List<RelationshipGroup>> _future;
 
   @override
@@ -30,7 +36,9 @@ class _GroupListScreenState extends State<GroupListScreen> {
   }
 
   void _reload() {
-    setState(() => _future = _repository.fetchMyGroups());
+    setState(() {
+      _future = _repository.fetchMyGroups();
+    });
   }
 
   Future<void> _goToCreate() async {
