@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
-  <rect width="1024" height="500" fill="#FF4081"/>
-  <g transform="translate(688,232) scale(0.52) translate(-512,-517)">
-    <path fill="#FFFFFF" fill-rule="evenodd" d="M 324.3 579.6 L 512 815 L 699.7 579.6 A 240 240 0 1 0 324.3 579.6 Z M 512 328 C 558 270.5 638.5 270.5 673 328 C 707.5 385.5 684.5 466 512 546.5 C 339.5 466 316.5 385.5 351 328 C 385.5 270.5 466 270.5 512 328 Z"/>
+  <rect width="1024" height="500" fill="#3B4272"/>
+  <g transform="translate(700,250) scale(2.55) translate(-100,-100)">
+    <g transform="translate(83,46) scale(1.7)"><path d="M12 21 C12 21 2 14.5 2 8.5 C2 5 4.8 2.5 8 2.5 C10 2.5 11.4 3.6 12 4.6 C12.6 3.6 14 2.5 16 2.5 C19.2 2.5 22 5 22 8.5 C22 14.5 12 21 12 21 Z" fill="#E9927F"/></g>
+    <path d="M22 120 H60 L68 120 L76 108 L86 138 L96 100 L106 120 H132 L140 110 L148 132 L156 120 H178" fill="none" stroke="#F3EDE5" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
   <text x="90" y="235" font-family="Noto Sans CJK KR" font-weight="700" font-size="88" fill="#FFFFFF">곁에</text>
-  <text x="92" y="315" font-family="Noto Sans CJK KR" font-weight="400" font-size="40" fill="#FFFFFF" fill-opacity="0.92">멀리 있어도, 곁에</text>
+  <text x="92" y="315" font-family="Noto Sans CJK KR" font-weight="400" font-size="40" fill="#F3EDE5" fill-opacity="0.92">멀리 있어도, 곁에</text>
 </svg>

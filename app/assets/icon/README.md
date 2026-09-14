@@ -1,21 +1,59 @@
-# 앱 아이콘 원본 (v0.1 임시안)
+# 앱 아이콘 — 로고 2B "역할 분리" (2026-09-14 확정)
 
-Din 제작, 2026-09-03. 스펙·배경은 `docs/design/v0.1-release-assets.md` §1.
+디자인 캔버스 "Gyeote 앱 디자인 개선안"의 2B 시안이 확정됐다. 원본 벡터는
+`logo-2b-source.svg`(가인님 제공, viewBox `0 0 200 200`) — **이 파일이 정본이고
+수정하지 않는다.** 아래 아이콘 자산은 전부 이 소스에서 파생했다.
 
-컨셉: 물방울형 위치 핀 + 하트 컷아웃. 배경 `#FF4081`(앱 테마 시드색), 심볼 흰색.
-v0.2에서 정식 일러스트로 교체 예정(스토어 재심사 사유 아님).
+## 컨셉
+
+**역할 분리 — 인디고 파형 · 로즈 하트.** 파형(심장박동 라인)은 차분한 인디고
+단색, 애정은 하트 하나에 몰아준다. 그라데이션이 없어 앱 아이콘·스탬프·자수까지
+형태가 그대로 유지되는 게 이 안의 핵심 논리다.
+
+| 요소 | 라이트(원본) | 다크 변형 |
+|---|---|---|
+| 하트(로즈) | `#D4685E` | `#E9927F` |
+| 파형(인디고) | `#3B4272`, stroke-width 6 | `#F3EDE5`, stroke-width 6 |
+
+## 아이콘 배경·색 결정 (Din, 2026-09-14)
+
+**인디고 배경(`#3B4272`) + 다크 변형 마크(하트 `#E9927F` / 파형 `#F3EDE5`)로
+확정.** 크림 배경(`#FAF5EF`) + 라이트 마크안과 비교해 판단한 근거:
+
+1. **대비**: WCAG 상대휘도 기준 인디고-on-크림 ≈ 8.78:1, 오프화이트-on-인디고
+   ≈ 8.19:1로 파형 대비는 둘 다 우수해 비슷하다. 하지만 **하트 대비는
+   인디고 배경 쪽이 더 좋다**(E9927F-on-인디고 ≈ 4.03:1 vs D4685E-on-크림
+   ≈ 3.26:1).
+2. **작은 크기 판독성(핵심 요청 사항)**: 48px·32px 렌더로 직접 비교한 결과
+   크림 배경은 채도가 낮아 아이콘 그리드에서 washed-out하게 보이고, 인디고
+   배경은 진한 필드가 형태를 또렷하게 잡아줘 더 잘 읽힌다. 홈 화면 아이콘은
+   "팔길이 테스트"(arm's-length legibility)가 기준이라 진하고 단일한 배경이
+   유리하다.
+3. **런처 다양성**: 밝은 배경 아이콘은 흰색 계열 런처/배경화면에서 존재감이
+   옅어질 위험이 있다. 진한 인디고는 어떤 배경에서도 anchor 색으로 기능한다.
+4. **브랜드 일관성**: 앱 테마 시드도 인디고로 바꿨다(아래) — 아이콘 배경과
+   테마 주색이 같은 값이면 스토어 목록의 아이콘과 앱을 열었을 때의 첫인상이
+   끊기지 않는다.
+
+**아이콘 전용 stroke-width 7 (소스는 6 그대로 유지).** 48px/32px 실측
+비교에서 stroke-width 6은 아주 작은 크기에서 파형이 살짝 끊겨 보이는
+지점이 있었고, 7은 뭉개짐 없이 또렷했다(9까지는 오히려 두꺼워 보임 —
+7이 균형점). 이 변경은 **아이콘 렌더링에만 적용**하고, 스탬프·자수·워드마크용
+정본(`logo-2b-source.svg`)의 stroke-width 6은 그대로 둔다 — 인쇄·자수는
+아이콘과 다른 매체라 원본 비율이 맞다.
 
 ## 파일
 
 | 파일 | 용도 |
 |---|---|
-| `app_icon.png` (1024²) | `flutter_launcher_icons`의 `image_path`. iOS AppIcon + Android 레거시 정사각. 핑크 배경 포함(불투명) |
-| `app_icon_foreground.png` (1024²) | adaptive 전경. 투명 배경, 심볼이 프레임을 크게 채움 — 생성기의 16% inset을 전제로 한 크기 |
-| `app_icon_background.png` (1024²) | adaptive 배경. 단색 `#FF4081` (색 문자열 `"#FF4081"`로 대체 가능) |
-| `app_icon_monochrome.png` (1024²) | Android 13+ 테마 아이콘용 흰 실루엣. `adaptive_icon_monochrome`로 배선 시 사용 |
+| `logo-2b-source.svg` | **정본.** 가인님 디자인 캔버스에서 추출한 2B 시안 원본. 수정 금지 — 재추출 시 이 파일을 교체 |
+| `app_icon.png` (1024²) | `flutter_launcher_icons`의 `image_path`. 인디고 배경 포함(불투명), iOS AppIcon + Android 레거시 정사각 + 스토어 아이콘 소스 |
+| `app_icon_foreground.png` (1024²) | adaptive 전경. 투명 배경, 생성기의 16% inset을 전제로 마크를 1.2배 키워 채움(최종 노출 폭 ≈64%, 여백 ≈18%) |
+| `app_icon_background.png` (1024²) | adaptive 배경. 단색 `#3B4272` |
+| `app_icon_monochrome.png` (1024²) | Android 13+ 테마 아이콘용 흰 실루엣(하트·파형 모두 흰색, 시스템이 재색상) |
 | `store_icon_512.png` (512²) | Google Play 등재 아이콘 |
 | `feature_graphic.png` (1024×500) | Google Play 피처 그래픽 |
-| `*.svg` | 각 PNG의 벡터 원본. v0.2 교체 시 여기서 편집 후 재렌더 |
+| `*.svg` (app_icon 계열) | 위 PNG들의 렌더 소스. **정본이 아님** — `logo-2b-source.svg`에서 배경·스케일·stroke-width만 바꿔 파생시킨 렌더용 파일 |
 
 ## 재생성
 
@@ -24,4 +62,12 @@ cd app && dart run flutter_launcher_icons
 ```
 
 `android/app/src/main/res/mipmap-*` + `ios/Runner/Assets.xcassets/AppIcon.appiconset`가
-생성된다. SVG를 고쳤으면 PNG부터 다시 뽑을 것(예: `rsvg-convert -w 1024 -h 1024 app_icon.svg -o app_icon.png`).
+생성된다. `logo-2b-source.svg`가 다시 바뀌면(예: 파형 곡선 수정) 위 "아이콘
+전용" 규칙(인디고 배경, 다크 변형 색, stroke-width 7, 전경 1.2배)을 그대로
+적용해 `app_icon*.svg`를 다시 만들고 `rsvg-convert -w 1024 -h 1024 <file>.svg -o <file>.png`로
+PNG를 새로 뽑는다.
+
+## 이전 임시안 (폐기)
+
+v0.1 초기에는 핀+하트 컷아웃(배경 `#FF4081`, `Colors.pinkAccent`)을 임시로
+썼다. 로고 2B 확정으로 전량 교체됐다 — 더 이상 참조하지 않는다.
