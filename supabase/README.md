@@ -31,6 +31,7 @@ supabase/
     20260915090001_location_history_captured_at_index.sql # 보존기간 정리 DELETE용 captured_at 단독 인덱스
     20260915090002_realtime_broadcast_dedup.sql            # notify_location_ping 브로드캐스트 디듀프 + 튜닝 가능한 임계값
     20260915090003_scope_share_mode_gating_to_group.sql    # get_share_mode/is_location_paused 크로스그룹 오라클 차단(그룹 한정 게이팅)
+    20260915090004_fix_is_location_paused_self_query.sql   # is_location_paused 자기조회 시 mode<>off 조건이 막던 불일치 수정
 ```
 
 운영(호스티드) 배포 절차는 `supabase/DEPLOYMENT.md` 참고.

@@ -3,9 +3,10 @@
 -- -----------------------------------------------------------------------------
 -- 대상: supabase/migrations/20260823100002_fix_location_spoofing_and_scope_bypass.sql,
 -- 20260823100003_fix_location_ping_input_validation.sql,
--- 20260915090003_scope_share_mode_gating_to_group.sql. Rena 재검토
+-- 20260915090003_scope_share_mode_gating_to_group.sql,
+-- 20260915090004_fix_is_location_paused_self_query.sql. Rena 재검토
 -- (docs/review/location-sharing-security-rereview.md)에서 지적된 항목 포함
--- 총 7개 취약점의 회귀 테스트:
+-- 총 8개 취약점/버그의 회귀 테스트:
 --   [HIGH-1] notify_location_ping() 위치 스푸핑
 --   [HIGH-2] get_peer_locations() 접근범위(그룹 경계) 우회
 --   [C = 100002의 A] get_share_mode()의 동일한 종류의 그룹 경계 우회 (섹션 3)
@@ -16,12 +17,16 @@
 --   [G = v0.2, 20260915090003] get_share_mode()/is_location_paused()의 크로스그룹
 --       can_view_location이 대상 그룹 자체가 off여도 다른 그룹의 활성 공유로
 --       진짜 모드/일시중지 값을 흘림 (Rena 지적, 2026-09-14)
--- 이 7건 모두 최신 마이그레이션 상태에서는 PASS여야 한다(실제 실행 결과는
--- 보고 참고 — 해당 마이그레이션 적용 전 버전으로 돌리면 C/D/F/E/G가 FAIL로
--- 나오므로, FAIL이 보이면 먼저 테스트 DB에 적용된 마이그레이션 버전부터
--- 확인할 것. [G]는 수정 전/후 두 상태 모두에서 실제로 로컬 검증됨 — 수정 전
--- 스키마에서 FAIL을 직접 관찰한 뒤 마이그레이션을 적용해 PASS로 바뀌는 것까지
--- 확인하고 되돌렸다).
+--   [H = v0.2, 20260915090004] [G]를 고치며 is_location_paused()에 넣은
+--       `mode <> 'off'` 조건이 본인 조회 분기까지 막아, 본인이 자기 그룹을
+--       off로 꺼두면 get_share_mode는 값을 주는데 is_location_paused만
+--       NULL을 주는 불일치 (Rena 지적, 2026-09-15)
+-- 이 8건 모두 최신 마이그레이션 상태에서는 PASS여야 한다(실제 실행 결과는
+-- 보고 참고 — 해당 마이그레이션 적용 전 버전으로 돌리면 C/D/F/E/G/H가
+-- FAIL로 나오므로, FAIL이 보이면 먼저 테스트 DB에 적용된 마이그레이션
+-- 버전부터 확인할 것. [G][H] 둘 다 수정 전/후 두 상태 모두에서 실제로 로컬
+-- 검증됨 — 수정 전 스키마에서 FAIL을 직접 관찰한 뒤 마이그레이션을 적용해
+-- PASS로 바뀌는 것까지 확인하고 되돌렸다).
 --
 -- 이 환경에는 Docker/Supabase CLI/pgTAP 확장이 없어 pgTAP 문법(`plan()`,
 -- `throws_matching()` 등)을 쓸 수 없다. 대신 각 케이스를 DO 블록으로 감싸
@@ -539,6 +544,39 @@ begin
     raise notice 'PASS: [G #16] is_location_paused: group5에서 off인 민지를, 크로스그룹 활성 공유가 있는 현우가 조회해도 NULL임';
   else
     raise notice 'FAIL: [G #16] is_location_paused: 현우가 크로스그룹 활성 공유를 이용해 group5의 진짜 pause 상태 "%"를 알아냄', v_paused;
+  end if;
+end $$;
+
+-- =============================================================================
+-- [H] is_location_paused 자기조회 불일치 — v0.2 2차 수정
+-- 20260915090004_fix_is_location_paused_self_query.sql 대상 (Rena 지적,
+-- 2026-09-15)
+-- 090003이 처음 그룹 한정으로 고칠 때 `s.mode <> 'off'`를 WHERE 최상위에
+-- 둬서, 본인이 자기 그룹을 off로 꺼둔 상태로 자기 pause 상태를 물으면
+-- get_share_mode는 값을 주는데 is_location_paused만 NULL을 주는 불일치가
+-- 있었다(음성 대조군으로 로컬 확인: 090004 적용 전 이 케이스가 실제로
+-- self_paused=NULL을 반환하는 것을 관찰 → 090004 적용 후 false로 바뀌는
+-- 것까지 확인 후 되돌림). 아래는 수정된 최종 스키마에서 통과해야 하는
+-- 계약 — 본인 조회는 그 그룹의 mode/멤버십과 무관하게 항상 값을 준다.
+-- =============================================================================
+reset role;
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000101';
+set local role authenticated;
+-- group5는 [G]에서 이미 off로 설정돼 있다(민지 본인의 그룹). 그대로 재사용.
+do $$
+declare
+  v_mode public.location_share_mode;
+  v_paused boolean;
+begin
+  select public.get_share_mode('00000000-0000-0000-0000-000000000101'::uuid, current_setting('qa.group5_id')::uuid)
+    into v_mode;
+  select public.is_location_paused('00000000-0000-0000-0000-000000000101'::uuid, current_setting('qa.group5_id')::uuid)
+    into v_paused;
+
+  if v_mode = 'off' and v_paused is not distinct from false then
+    raise notice 'PASS: [H #17] 본인이 자기 그룹(off)을 조회하면 get_share_mode="off"/is_location_paused=false로 일치함(자기조회 무영향 확인)';
+  else
+    raise notice 'FAIL: [H #17] 본인조회 불일치 재발 — get_share_mode=%, is_location_paused=%(둘 다 값이 나와야 함, NULL이면 안 됨)', v_mode, v_paused;
   end if;
 end $$;
 
