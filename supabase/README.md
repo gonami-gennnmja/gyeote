@@ -27,6 +27,9 @@ supabase/
     20260823100002_fix_location_spoofing_and_scope_bypass.sql # 위치 스푸핑/그룹 접근범위 우회 차단
     20260823100003_fix_location_ping_input_validation.sql # accuracy_m/battery_level 입력 검증 누락 수정
     20260903090001_schedule_location_history_retention.sql # location_history 보존기간 정리 pg_cron 잡 등록
+    -- v0.1 여기까지 (v0.1.0-rc1 태그, 운영 적용 완료). 아래는 v0.2.
+    20260915090001_location_history_captured_at_index.sql # 보존기간 정리 DELETE용 captured_at 단독 인덱스
+    20260915090002_realtime_broadcast_dedup.sql            # notify_location_ping 브로드캐스트 디듀프 + 튜닝 가능한 임계값
 ```
 
 운영(호스티드) 배포 절차는 `supabase/DEPLOYMENT.md` 참고.
