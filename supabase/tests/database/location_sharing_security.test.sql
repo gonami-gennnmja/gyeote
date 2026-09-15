@@ -2,9 +2,10 @@
 -- 곁에(Gyeote) 위치 공유 보안 회귀 테스트 (pgTAP 미사용, 순수 SQL 단언)
 -- -----------------------------------------------------------------------------
 -- 대상: supabase/migrations/20260823100002_fix_location_spoofing_and_scope_bypass.sql,
--- 20260823100003_fix_location_ping_input_validation.sql. Rena 재검토
+-- 20260823100003_fix_location_ping_input_validation.sql,
+-- 20260915090003_scope_share_mode_gating_to_group.sql. Rena 재검토
 -- (docs/review/location-sharing-security-rereview.md)에서 지적된 항목 포함
--- 총 6개 취약점의 회귀 테스트:
+-- 총 7개 취약점의 회귀 테스트:
 --   [HIGH-1] notify_location_ping() 위치 스푸핑
 --   [HIGH-2] get_peer_locations() 접근범위(그룹 경계) 우회
 --   [C = 100002의 A] get_share_mode()의 동일한 종류의 그룹 경계 우회 (섹션 3)
@@ -12,10 +13,15 @@
 --   [F = 100002의 C] 일시중지(paused_until)가 get_peer_locations에서 그룹별로 적용되지 않음
 --   [E = 100003] upsert_location_ping()의 accuracy_m/battery_level 범위 검증 누락으로 인한
 --       원시 제약조건 위반 메시지 노출 (P0-4)
--- 이 6건 모두 100002/100003이 적용된 최신 마이그레이션 상태에서는 PASS여야
--- 한다(실제 실행 결과는 보고 참고 — 100002/100003 적용 전 버전으로 돌리면
--- C/D/F/E가 FAIL로 나오므로, FAIL이 보이면 먼저 테스트 DB에 적용된 마이그레이션
--- 버전부터 확인할 것).
+--   [G = v0.2, 20260915090003] get_share_mode()/is_location_paused()의 크로스그룹
+--       can_view_location이 대상 그룹 자체가 off여도 다른 그룹의 활성 공유로
+--       진짜 모드/일시중지 값을 흘림 (Rena 지적, 2026-09-14)
+-- 이 7건 모두 최신 마이그레이션 상태에서는 PASS여야 한다(실제 실행 결과는
+-- 보고 참고 — 해당 마이그레이션 적용 전 버전으로 돌리면 C/D/F/E/G가 FAIL로
+-- 나오므로, FAIL이 보이면 먼저 테스트 DB에 적용된 마이그레이션 버전부터
+-- 확인할 것. [G]는 수정 전/후 두 상태 모두에서 실제로 로컬 검증됨 — 수정 전
+-- 스키마에서 FAIL을 직접 관찰한 뒤 마이그레이션을 적용해 PASS로 바뀌는 것까지
+-- 확인하고 되돌렸다).
 --
 -- 이 환경에는 Docker/Supabase CLI/pgTAP 확장이 없어 pgTAP 문법(`plan()`,
 -- `throws_matching()` 등)을 쓸 수 없다. 대신 각 케이스를 DO 블록으로 감싸
@@ -459,6 +465,81 @@ exception
     else
       raise notice 'FAIL: [E #12] 예상과 다른 에러: %', sqlerrm;
     end if;
+end $$;
+
+-- =============================================================================
+-- [G] get_share_mode()/is_location_paused() 크로스그룹 오라클 — v0.2
+-- 20260915090003_scope_share_mode_gating_to_group.sql 수정 대상 (Rena 지적,
+-- 2026-09-14 / 설계 승인 2026-09-15)
+-- 민지는 group4(위에서 이미 active precise로 유지 중)와 새로 만드는 group5
+-- 양쪽에 현우와 함께 속해 있다. group5는 명시적으로 off다. 현우는 group5의
+-- 진짜 멤버이면서 group4 덕에 민지와 "어느 그룹에서든" 활성 공유 중이다 —
+-- 수정 전에는 이 크로스그룹 활성 공유가 group5 자체의 off 상태를 뚫고
+-- get_share_mode/is_location_paused의 진짜 값을 흘렸다(음성 대조군으로 로컬
+-- 확인: 수정 전 스키마에서 이 두 호출이 각각 'off'/false를 반환하는 것을
+-- 실제로 관찰 → 수정 마이그레이션 적용 → 같은 호출이 NULL/NULL로 바뀌는
+-- 것까지 확인 후 되돌림). 아래는 수정된(최종) 스키마에서 통과해야 하는
+-- 계약이다.
+-- =============================================================================
+reset role;
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000101';
+set local role authenticated;
+select public.create_relationship_group('couple', '민지♥현우 group5 (off, 보안 회귀)');
+
+reset role;
+select id as group5_id from public.relationship_groups
+ where name = '민지♥현우 group5 (off, 보안 회귀)' \gset
+select set_config('qa.group5_id', :'group5_id', false);
+
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000101';
+set local role authenticated;
+select public.create_relationship_invitation(:'group5_id'::uuid);
+
+reset role;
+select invite_code as group5_invite from public.relationship_invitations
+ where group_id = :'group5_id'::uuid \gset
+
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000102';
+set local role authenticated;
+select public.accept_relationship_invitation(:'group5_invite');
+
+-- 민지가 group5를 명시적으로 off로 설정(설정 행은 생김, 값은 off).
+reset role;
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000101';
+set local role authenticated;
+select public.set_location_share_mode(:'group5_id'::uuid, 'off');
+
+-- 15) 현우(group5 진짜 멤버, group4로 민지와 크로스그룹 활성 공유 중)가
+--     group5에서 민지의 진짜 모드를 직접 RPC로 조회 → NULL이어야 한다.
+reset role;
+set local request.jwt.claim.sub to '00000000-0000-0000-0000-000000000102';
+set local role authenticated;
+do $$
+declare
+  v_mode public.location_share_mode;
+begin
+  select public.get_share_mode('00000000-0000-0000-0000-000000000101'::uuid, current_setting('qa.group5_id')::uuid)
+    into v_mode;
+  if v_mode is null then
+    raise notice 'PASS: [G #15] get_share_mode: group5에서 off인 민지를, group4 크로스그룹 활성 공유가 있는 현우가 조회해도 NULL임(크로스그룹 오라클 차단)';
+  else
+    raise notice 'FAIL: [G #15] get_share_mode: 현우가 group4 크로스그룹 활성 공유를 이용해 group5의 진짜 모드 "%"를 알아냄(크로스그룹 오라클 재발)', v_mode;
+  end if;
+end $$;
+
+-- 16) 같은 조건에서 is_location_paused(민지, group5)도 NULL이어야 한다
+--     (수정 전에는 false를 반환해 "행이 존재하고 off"를 간접 노출했다).
+do $$
+declare
+  v_paused boolean;
+begin
+  select public.is_location_paused('00000000-0000-0000-0000-000000000101'::uuid, current_setting('qa.group5_id')::uuid)
+    into v_paused;
+  if v_paused is null then
+    raise notice 'PASS: [G #16] is_location_paused: group5에서 off인 민지를, 크로스그룹 활성 공유가 있는 현우가 조회해도 NULL임';
+  else
+    raise notice 'FAIL: [G #16] is_location_paused: 현우가 크로스그룹 활성 공유를 이용해 group5의 진짜 pause 상태 "%"를 알아냄', v_paused;
+  end if;
 end $$;
 
 do $$ begin raise notice '=== 검증 끝 ==='; end $$;
